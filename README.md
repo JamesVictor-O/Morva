@@ -1,4 +1,3 @@
-````markdown
 # Morva
 
 **One balance. Any chain.**
@@ -333,4 +332,4 @@ Available Balance
 ```
 
 Everything else happens automatically.
-````
+
