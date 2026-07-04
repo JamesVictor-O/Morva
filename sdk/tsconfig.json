@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM"],
     "module": "ESNext",
     "moduleResolution": "bundler",
     "declaration": true,
@@ -9,7 +9,17 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {
+      // @particle-network/universal-account-sdk's package.json "exports"
+      // map has no "types" condition, so TS can't resolve its .d.ts
+      // through it even though a root "types" field exists — same
+      // resolution quirk seen elsewhere in this codebase with this
+      // package. Point straight at the real declaration file.
+      "@particle-network/universal-account-sdk": [
+        "./node_modules/@particle-network/universal-account-sdk/dist/index.d.ts"
+      ]
+    }
   },
-  "include": ["src"]
+  "include": ["src", "scripts", "test"]
 }

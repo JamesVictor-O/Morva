@@ -19,10 +19,19 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "lint": "eslint ."
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "tsx scripts/e2e-payment.ts"
   },
   "devDependencies": {
+    "dotenv": "^17.4.2",
     "tsup": "^8.3.5",
-    "typescript": "^5"
+    "tsx": "^4.23.0",
+    "typescript": "^5",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "@particle-network/universal-account-sdk": "2.0.3",
+    "viem": "^2.54.2"
   }
 }
