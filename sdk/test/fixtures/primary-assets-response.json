@@ -1,0 +1,89 @@
+{
+  "totalAmountInUSD": 42.7663,
+  "assets": [
+    {
+      "tokenType": "usdc",
+      "price": 1,
+      "amount": 40.5,
+      "amountInUSD": 40.5,
+      "chainAggregation": [
+        {
+          "token": {
+            "chainId": 8453,
+            "address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+            "decimals": 6,
+            "realDecimals": 6,
+            "symbol": "USDC",
+            "name": "USD Coin",
+            "isMultiChain": true,
+            "isMultiChainDefault": true
+          },
+          "amount": 25,
+          "amountInUSD": 25,
+          "rawAmount": 25000000
+        },
+        {
+          "token": {
+            "chainId": 42161,
+            "address": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+            "decimals": 6,
+            "realDecimals": 6,
+            "symbol": "USDC",
+            "name": "USD Coin",
+            "isMultiChain": true,
+            "isMultiChainDefault": false
+          },
+          "amount": 15.5,
+          "amountInUSD": 15.5,
+          "rawAmount": 15500000
+        }
+      ]
+    },
+    {
+      "tokenType": "eth",
+      "price": 3540.12,
+      "amount": 0.0006,
+      "amountInUSD": 2.1241,
+      "chainAggregation": [
+        {
+          "token": {
+            "chainId": 1,
+            "address": "0x0000000000000000000000000000000000000000",
+            "decimals": 18,
+            "realDecimals": 18,
+            "symbol": "ETH",
+            "name": "Ethereum",
+            "isMultiChain": false,
+            "isMultiChainDefault": false
+          },
+          "amount": 0.0006,
+          "amountInUSD": 2.1241,
+          "rawAmount": 600000000000000
+        }
+      ]
+    },
+    {
+      "tokenType": "sol",
+      "price": 202.34,
+      "amount": 0.005,
+      "amountInUSD": 1.0117,
+      "chainAggregation": [
+        {
+          "token": {
+            "chainId": 101,
+            "address": "0x0000000000000000000000000000000000000000",
+            "decimals": 9,
+            "realDecimals": 9,
+            "symbol": "SOL",
+            "name": "Solana",
+            "isMultiChain": false,
+            "isMultiChainDefault": false
+          },
+          "amount": 0.005,
+          "amountInUSD": 1.0117,
+          "rawAmount": 5000000
+        }
+      ]
+    }
+  ]
+}
