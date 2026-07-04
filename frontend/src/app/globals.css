@@ -1,26 +1,115 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces */
+  --color-app-bg: #efefec;
+  --color-surface: #fbfbf9;
+  --color-surface-solid: #ffffff;
+
+  /* Ink (text) */
+  --color-ink: #16161a;
+  --color-ink-soft: #6f6f76;
+  --color-ink-faint: #8a8a84;
+  --color-ink-quiet: #a9a9a2;
+  --color-ink-whisper: #b0b0aa;
+
+  /* Borders & fills */
+  --color-border: #e4e4e0;
+  --color-border-soft: #ebebe8;
+  --color-border-strong: #dededa;
+  --color-divider: #f1f1ee;
+  --color-fill: #f3f3f0;
+
+  /* Brand */
+  --color-primary: #2d5bff;
+  --color-primary-ink: #ffffff;
+
+  /* Semantic */
+  --color-success-bg: #e4f3ea;
+  --color-success-fg: #1e7a4d;
+  --color-error-bg: #fbe7e3;
+  --color-error-fg: #b23b2e;
+  --color-error-fg-soft: #9e5147;
+
+  /* Stall accent pairs */
+  --color-accent-purple-bg: #e7e3f6;
+  --color-accent-purple-fg: #5b4e8c;
+  --color-accent-green-bg: #dcf2e5;
+  --color-accent-green-fg: #3e7a57;
+  --color-accent-yellow-bg: #f8e9a8;
+  --color-accent-yellow-fg: #8a7526;
+  --color-accent-peach-bg: #fbe3d6;
+  --color-accent-peach-fg: #9e6647;
+  --color-accent-beige-bg: #edebe6;
+  --color-accent-beige-fg: #6f6a5e;
+  --color-accent-slate-bg: #edeff6;
+  --color-accent-slate-fg: #5b6478;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-app-bg: var(--color-app-bg);
+  --color-surface: var(--color-surface);
+  --color-surface-solid: var(--color-surface-solid);
+
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-ink-faint: var(--color-ink-faint);
+  --color-ink-quiet: var(--color-ink-quiet);
+  --color-ink-whisper: var(--color-ink-whisper);
+
+  --color-border: var(--color-border);
+  --color-border-soft: var(--color-border-soft);
+  --color-border-strong: var(--color-border-strong);
+  --color-divider: var(--color-divider);
+  --color-fill: var(--color-fill);
+
+  --color-primary: var(--color-primary);
+  --color-primary-ink: var(--color-primary-ink);
+
+  --color-success-bg: var(--color-success-bg);
+  --color-success-fg: var(--color-success-fg);
+  --color-error-bg: var(--color-error-bg);
+  --color-error-fg: var(--color-error-fg);
+  --color-error-fg-soft: var(--color-error-fg-soft);
+
+  --color-accent-purple-bg: var(--color-accent-purple-bg);
+  --color-accent-purple-fg: var(--color-accent-purple-fg);
+  --color-accent-green-bg: var(--color-accent-green-bg);
+  --color-accent-green-fg: var(--color-accent-green-fg);
+  --color-accent-yellow-bg: var(--color-accent-yellow-bg);
+  --color-accent-yellow-fg: var(--color-accent-yellow-fg);
+  --color-accent-peach-bg: var(--color-accent-peach-bg);
+  --color-accent-peach-fg: var(--color-accent-peach-fg);
+  --color-accent-beige-bg: var(--color-accent-beige-bg);
+  --color-accent-beige-fg: var(--color-accent-beige-fg);
+  --color-accent-slate-bg: var(--color-accent-slate-bg);
+  --color-accent-slate-fg: var(--color-accent-slate-fg);
+
+  --font-sans: var(--font-general-sans);
+  --font-mono: var(--font-jetbrains-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: #d6e0ff;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-app-bg);
+  color: var(--color-ink);
+  font-family: var(--font-general-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+@keyframes morva-progress {
+  0% {
+    left: -38%;
+  }
+  100% {
+    left: 100%;
+  }
 }

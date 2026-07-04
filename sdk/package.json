@@ -24,6 +24,7 @@
     "e2e": "tsx scripts/e2e-payment.ts"
   },
   "devDependencies": {
+    "@types/node": "^20.19.43",
     "dotenv": "^17.4.2",
     "tsup": "^8.3.5",
     "tsx": "^4.23.0",
