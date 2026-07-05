@@ -1,335 +1,181 @@
 # Morva
 
-**One balance. Any chain.**
+**Crypto checkout that feels like Web2.**
 
-Morva is a chain-abstracted financial account that turns fragmented crypto assets into a single spendable balance.
+Morva is a checkout SDK that lets online merchants accept crypto payments from buyers on any chain, settled to one token on one chain of the merchant's choosing.
 
-Today, users often hold assets across multiple wallets, chains, and tokens:
+The buyer pays from a single balance made up of everything they hold across chains — using their existing wallet, with one signature. No bridging, no network switching, no gas management. The merchant receives exactly the token they configured, every time.
 
-- USDC on Base
-- USDT on Arbitrum
-- ETH on Ethereum
-- SOL on Solana
-
-Although these assets belong to the same person, they cannot be used as a single balance without bridging, swapping, managing gas tokens, or moving funds between wallets.
-
-Morva removes that complexity.
-
-Users connect their wallets, view a unified balance, and spend from it without worrying about where funds are stored or how liquidity is routed.
+Built for the UXmaxx Hackathon: Particle Network EIP-7702 track + Arbitrum bonus track.
 
 ---
 
-# The Problem
+## The problem
 
-Crypto users do not manage money.
+Crypto commerce loses the sale at checkout.
 
-They manage infrastructure.
+A buyer holds ETH on Base, USDC on Optimism, and POL on Polygon. The merchant accepts USDC on Arbitrum. To complete a purchase, the buyer must:
 
-A simple payment often requires:
+1. Find a bridge
+2. Pay gas on two chains
+3. Switch networks
+4. Wait for finality
+5. Return and try checkout again
 
-1. Finding which wallet holds funds
-2. Checking which chain those funds are on
-3. Bridging assets
-4. Swapping tokens
-5. Acquiring gas tokens
-6. Executing the transaction
+Every step is a place to abandon the purchase. Most buyers do. This isn't a wallet problem or a chain problem — it's a checkout problem.
 
-This creates unnecessary friction.
+## The solution
 
-For most users, money spread across multiple chains feels fragmented and difficult to use.
-
-Example:
-
-```text
-Wallet A
-100 USDC on Base
-
-Wallet B
-50 USDT on Arbitrum
-
-Wallet C
-2 SOL on Solana
+```
+  Buyer                        Morva                        Merchant
+  one balance across    →     reads config on-chain,   →   receives USDC
+  every chain, their          routes value, collects        on Arbitrum,
+  own wallet                  one signature                 as configured
 ```
 
-Although the user owns all of these assets, they cannot easily treat them as one balance.
+**Merchants** register how they want to get paid — settlement token, recipient address — in the Morva registry contract on Arbitrum One. Once.
+
+**Buyers** click Pay. Morva builds a universal transaction against their cross-chain balance via Particle Network's Universal Accounts in EIP-7702 mode: their EOA becomes a chain-abstracted account *in place* — no new address, no migration, no deposits. One signature; routing, swapping, and gas happen underneath.
+
+**Settlement** lands on Arbitrum One with a verifiable receipt.
 
 ---
 
-# The Solution
+## Integration
 
-Morva provides a single financial account powered by chain abstraction.
+```tsx
+import { MorvaPay } from "@morva/sdk/react";
 
-Instead of showing:
-
-```text
-100 USDC on Base
-50 USDT on Arbitrum
-2 SOL on Solana
+<MorvaPay
+  merchant="0x84f…c2A"
+  amount="36.00"
+  orderId="ord_1042"
+  onSuccess={(r) => console.log(r.explorerUrl)}
+/>
 ```
 
-Morva shows:
+That's the whole integration. A headless core is also available:
 
-```text
-Available Balance
+```ts
+import { createMorva } from "@morva/sdk";
 
-$427.63
-```
-
-When a user sends money, Morva automatically determines:
-
-- Which assets should be used
-- Which chains should execute the transaction
-- How liquidity should be routed
-
-The user simply chooses an amount and confirms the payment.
-
----
-
-# How It Works
-
-## Step 1: Sign In
-
-Users sign in using a familiar authentication flow.
-
-No seed phrases are required during onboarding.
-
----
-
-## Step 2: Create Universal Account
-
-Morva creates a Particle Universal Account.
-
-This account becomes the user's chain-abstracted identity.
-
----
-
-## Step 3: Connect Assets
-
-Users connect existing wallets and deposit supported assets.
-
-Examples:
-
-- USDC
-- USDT
-- ETH
-- SOL
-
----
-
-## Step 4: View Unified Balance
-
-Morva aggregates balances across supported chains and presents them as a single spendable balance.
-
----
-
-## Step 5: Send or Spend
-
-The user chooses an amount.
-
-Morva handles:
-
-- Asset selection
-- Cross-chain routing
-- Execution
-- Settlement
-
-without exposing blockchain complexity.
-
----
-
-# User Flow
-
-```text
-Sign In
-    ↓
-Create Universal Account
-    ↓
-Connect Assets
-    ↓
-View Unified Balance
-    ↓
-Send / Spend
-    ↓
-Morva Routes Liquidity
-    ↓
-Transaction Complete
+const morva = createMorva({ particle: { /* credentials */ }, registryAddress });
+const intent = await morva.createPaymentIntent({ merchant, amount: "36.00", orderId: "ord_1042" });
+const session = await morva.connect(signer);
+const result = await session.pay(intent, { onStatus: console.log });
 ```
 
 ---
 
-# Architecture
+## Live demo — the Plaza
 
-```text
-┌────────────────────┐
-│      Frontend      │
-│    Next.js App     │
-└──────────┬─────────┘
-           │
-           ▼
-┌────────────────────┐
-│ Authentication     │
-│ Magic / Social     │
-│ Login              │
-└──────────┬─────────┘
-           │
-           ▼
-┌────────────────────┐
-│ Particle Universal │
-│ Account            │
-└──────────┬─────────┘
-           │
-           ▼
-┌────────────────────┐
-│ Balance Engine     │
-│ Aggregates Assets  │
-│ Across Chains      │
-└──────────┬─────────┘
-           │
-           ▼
-┌────────────────────┐
-│ Routing Layer      │
-│ Chain Abstraction  │
-│ Liquidity Routing  │
-└──────────┬─────────┘
-           │
-           ▼
-┌────────────────────┐
-│ Transaction        │
-│ Settlement         │
-└────────────────────┘
+<!-- PLACEHOLDER: demo URL -->
+**[plaza demo →](https://TODO)**
+
+The Plaza is a multi-merchant storefront proving the SDK end-to-end. Merchants open stalls the way they rent them in a physical market: register once, on-chain. Every stall can settle differently; every buyer pays the same way. The storefront renders directly from registry events — chain state is the UI.
+
+Two buyer paths are supported:
+- **Existing wallet** — the EOA is upgraded via EIP-7702 on first payment
+- **Email / social login** — Magic embedded wallets, for buyers who have never held crypto
+
+### Proof of settlement
+
+<!-- PLACEHOLDER: replace with real values after Gate 2 / deployment -->
+| | |
+|---|---|
+| Registry contract (Arbitrum One) | `TODO: address + Arbiscan link` |
+| First cross-chain settlement | `TODO: explorer link — buyer funds sourced from two chains, settled USDC on Arbitrum` |
+
+---
+
+## How a payment actually happens
+
+1. **Merchant registers** — settlement token + recipient stored in `MorvaRegistry` on Arbitrum One
+2. **Buyer clicks Buy** — the SDK reads the merchant's config and builds a universal transaction against the buyer's balance across all supported chains
+3. **One signature** — the buyer's 7702-upgraded EOA signs once; liquidity routing, swaps, and gas are handled by Universal Accounts
+4. **Settled on Arbitrum** — the merchant's recipient address receives the configured token; the receipt links to the settlement transaction
+
+## Architecture
+
+```
+morva/
+├── contracts/   MorvaRegistry.sol — merchant config on Arbitrum One (Foundry)
+├── sdk/         @morva/sdk — headless core + React checkout (tsup, ESM+CJS)
+└── frontend/    the Plaza — Next.js demo storefront + merchant onboarding
 ```
 
----
-
-# Why Particle Network
-
-Morva is built around Particle's Universal Accounts and chain abstraction infrastructure.
-
-Without chain abstraction, users must manually:
-
-- Switch networks
-- Bridge assets
-- Manage gas
-- Move funds between chains
-
-Particle allows Morva to present a single account experience while routing transactions across chains behind the scenes.
-
-This enables the core product experience:
-
-```text
-One Account
-One Balance
-Any Chain
+```
+Buyer EOA (existing wallet or Magic embedded)
+        │  EIP-7702 upgrade in place
+        ▼
+Particle Universal Account ── unified balance across 8+ chains
+        │  one signature, cross-chain liquidity routing
+        ▼
+Arbitrum One ── MorvaRegistry (merchant config) + settlement
+        │
+        ▼
+Merchant recipient receives configured token
 ```
 
----
+### The registry
 
-# Target Users
+Merchant identity is the owner address — one store per address, by design.
 
-Morva is designed for users who regularly interact with assets across multiple chains.
-
-Examples include:
-
-### Freelancers
-
-Receive payments from different clients on different networks.
-
-### Creators
-
-Manage earnings across ecosystems and platforms.
-
-### Remote Workers
-
-Hold digital assets across multiple wallets and chains.
-
-### Crypto Users
-
-Want a simpler way to manage and spend assets.
-
----
-
-# Supported Assets
-
-Initial MVP support:
-
-- USDC
-- USDT
-- ETH
-- SOL
-
-Additional assets and networks can be added over time.
-
----
-
-# MVP Scope
-
-The initial version of Morva focuses on five core features:
-
-### Authentication
-
-- Social login
-
-### Universal Account
-
-- Particle Universal Account creation
-
-### Asset Deposits
-
-- Multi-chain asset support
-
-### Unified Balance
-
-- Single balance view
-
-### Payments
-
-- Cross-chain spending and transfers
-
----
-
-# Tech Stack
-
-### Frontend
-
-- Next.js
-- TypeScript
-- Tailwind CSS
-
-### Authentication
-
-- Magic
-
-### Chain Abstraction
-
-- Particle Network Universal Accounts
-- EIP-7702
-
-### Payments & Routing
-
-- Particle Chain Abstraction
-
-### Infrastructure
-
-- Vercel
-
----
-
-# Vision
-
-Morva removes blockchain infrastructure from everyday financial interactions.
-
-Users should not need to understand:
-
-- Chains
-- Bridges
-- Gas Tokens
-- Liquidity Routing
-
-They should only need to understand one thing:
-
-```text
-Available Balance
+```solidity
+struct MerchantConfig {
+    address settlementToken;
+    address settlementRecipient;
+    string  metadataURI;
+    bool    active;
+}
 ```
 
-Everything else happens automatically.
+The registry lives on Arbitrum even for future merchants settling elsewhere — Arbitrum is Morva's coordination layer, not just a deployment target.
 
+---
+
+## Stack
+
+| Layer | Tech |
+|---|---|
+| Chain abstraction | Particle Network Universal Accounts, EIP-7702 mode |
+| Settlement + registry | Arbitrum One |
+| Buyer onboarding | Magic embedded wallets (social login) + existing EOAs |
+| Contracts | Solidity, Foundry |
+| SDK | TypeScript, viem, tsup (ESM + CJS + types) |
+| Frontend | Next.js, TypeScript |
+
+### Track compliance
+
+- ✅ Universal Accounts SDK in EIP-7702 mode — the payment path itself
+- ✅ Cross-chain operation moving value via UA — every purchase
+- ✅ Deployed on and running primarily on Arbitrum — registry + all settlement
+- ✅ Chain-abstracted UX — social login, gas abstraction, invisible routing
+
+---
+
+## Running locally
+
+```bash
+git clone https://github.com/TODO/morva
+cd morva && pnpm install
+
+# contracts
+cd contracts && forge test
+
+# sdk
+cd sdk && pnpm build && pnpm test
+
+# plaza
+cd frontend && cp .env.example .env.local   # Particle + Magic credentials
+pnpm dev
+```
+
+Required environment variables are documented in `.env.example`. You'll need a Particle dashboard project and a Magic app.
+
+
+
+---
+
+
+---
