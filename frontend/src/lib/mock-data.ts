@@ -26,7 +26,7 @@ export const STALLS: Stall[] = [
     featured: true,
     payoutAddress: "0x7a3f4b2c9e1d8f6a5c3b0e7d2f9a1c4b8e6d3f2a",
     illustration: "ceramics",
-    photoUrl: "/stall-photos/kinfolk-vase-poppies.jpg",
+    photoUrl: "/product-photos/kinfolk-vase-poppies.jpg",
   },
   {
     id: "verde",
@@ -71,7 +71,7 @@ export const STALLS: Stall[] = [
     location: "Marfa, TX",
     payoutAddress: "0x4d8a2c6e0b9f7a5d3c1b8e6f4a2d0c9b7e5f3a1d",
     illustration: "tote-bag",
-    photoUrl: "/stall-photos/rue-tote-bags.jpg",
+    photoUrl: "/product-photos/rue-tote-bags.jpg",
   },
   {
     id: "sole",
@@ -86,7 +86,7 @@ export const STALLS: Stall[] = [
     location: "Los Angeles, CA",
     payoutAddress: "0x5f9b3d7a1c8e6f4b2a0d9c7e5b3f1a8d6c4e2f0b",
     illustration: "shoe",
-    photoUrl: "/stall-photos/sole-sneaker-nike.jpg",
+    photoUrl: "/product-photos/sole-sneaker-nike.jpg",
   },
   {
     id: "nook",
@@ -136,10 +136,10 @@ export const PRODUCTS: Product[] = [
   { id: "weekender", stallId: "rue", name: "Leather weekender", meta: "full-grain, brass hardware", priceUsd: 180 },
   { id: "wallet", stallId: "rue", name: "Bifold wallet", meta: "vegetable-tanned", priceUsd: 58 },
   { id: "belt", stallId: "rue", name: "Everyday belt", meta: "1.25\" · brass buckle", priceUsd: 46 },
-  { id: "canvas-tote", stallId: "rue", name: "Canvas tote", meta: "waxed canvas · leather trim", priceUsd: 74, photoUrl: "/product-photos/rue-canvas-tote.jpg" },
+  { id: "canvas-tote", stallId: "rue", name: "Canvas tote", meta: "waxed canvas · leather trim", priceUsd: 74, photoUrl: "/product-photos/rue-tote-bags.jpg" },
 
   { id: "sneaker-vans", stallId: "sole", name: "Classic low-top sneaker", meta: "canvas · vulcanized sole", priceUsd: 68, photoUrl: "/product-photos/sole-sneaker-vans.jpg" },
-  { id: "sneaker-court", stallId: "sole", name: "Court sneaker", meta: "leather · rubber cupsole", priceUsd: 92, photoUrl: "/stall-photos/sole-sneaker-nike.jpg" },
+  { id: "sneaker-court", stallId: "sole", name: "Court sneaker", meta: "leather · rubber cupsole", priceUsd: 92, photoUrl: "/product-photos/sole-sneaker-nike.jpg" },
   { id: "ankle-boot", stallId: "sole", name: "Croc-embossed ankle boot", meta: "leather · block heel", priceUsd: 148, photoUrl: "/product-photos/sole-boot.jpg" },
   { id: "suede-loafer", stallId: "sole", name: "Suede loafer", meta: "suede · leather sole", priceUsd: 118, photoUrl: "/product-photos/sole-loafer.jpg" },
   { id: "crossbody-bag", stallId: "sole", name: "Quilted crossbody bag", meta: "vegan leather · chain strap", priceUsd: 54, photoUrl: "/product-photos/sole-crossbody-bag.jpg" },
@@ -251,6 +251,10 @@ export function getStallById(id: string): Stall | undefined {
 
 export function getProductsByStallId(stallId: string): Product[] {
   return PRODUCTS.filter((product) => product.stallId === stallId);
+}
+
+export function getProductById(id: string): Product | undefined {
+  return PRODUCTS.find((product) => product.id === id);
 }
 
 export function getFeaturedStall(): Stall {

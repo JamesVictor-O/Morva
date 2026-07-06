@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Sidebar } from "./sidebar";
 import { BUYER_NAV, MERCHANT_NAV } from "./nav-config";
+import { useAuth } from "@/lib/auth-context";
+import { SignInGate } from "@/components/auth/sign-in-gate";
 
 export function AppShell({
   variant,
@@ -19,11 +21,21 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const navItems = variant === "buyer" ? BUYER_NAV : MERCHANT_NAV;
+  const { status } = useAuth();
+
+  if (status !== "authenticated") {
+    return (
+      <SignInGate
+        title={variant === "merchant" ? "Sign in to run your stall" : "Sign in to enter the plaza"}
+        body="Every stall runs on one balance — sign in with just your email and Magic sets up your wallet automatically."
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface lg:flex">
       <div className="flex items-center justify-between border-b border-border-soft px-5 py-4 lg:hidden">
-        <Link href="/" className="flex items-center gap-[10px]">
+        <Link href="/plaza" className="flex items-center gap-[10px]">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-[14px] font-semibold text-white">
             M
           </div>

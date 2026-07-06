@@ -4,9 +4,10 @@ import { useState } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { BalancePill } from "@/components/checkout/balance-pill";
+import { UserAvatar } from "@/components/auth/user-avatar";
 import { AvatarTile } from "@/components/ui/avatar-tile";
 import { StatusPill } from "@/components/ui/status-pill";
-import { ORDERS, UNIFIED_BALANCE, getStallById } from "@/lib/mock-data";
+import { ORDERS, getStallById } from "@/lib/mock-data";
 import type { Order, OrderStatus } from "@/lib/types";
 
 type Filter = "all" | OrderStatus;
@@ -35,8 +36,8 @@ export default function OrdersPage() {
         left={<p className="text-[32px] font-semibold tracking-tight text-ink sm:text-[38px]">Your orders</p>}
         right={
           <>
-            <BalancePill balance={UNIFIED_BALANCE} />
-            <AvatarTile label="AR" accent="purple" size="lg" className="rounded-full" />
+            <BalancePill />
+            <UserAvatar />
           </>
         }
       />

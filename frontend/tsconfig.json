@@ -19,7 +19,15 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // @particle-network/universal-account-sdk's package.json "exports"
+      // map has no "types" condition, so TS can't resolve its .d.ts
+      // through it even though a root "types" field exists — same
+      // resolution quirk worked around in sdk/tsconfig.json. Point
+      // straight at the real declaration file.
+      "@particle-network/universal-account-sdk": [
+        "./node_modules/@particle-network/universal-account-sdk/dist/index.d.ts"
+      ]
     }
   },
   "include": [

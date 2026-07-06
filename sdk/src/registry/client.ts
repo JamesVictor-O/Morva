@@ -9,6 +9,7 @@ import {
 import { MORVA_REGISTRY_ABI } from "./abi";
 import { fetchMerchantMetadata, type MerchantMetadata } from "./metadata";
 import { MerchantNotFound, MorvaSdkError, RegistryNotConfigured } from "../errors";
+import { DEFAULT_REGISTRY_DEPLOYMENT_BLOCK } from "../config";
 
 export interface MerchantConfig {
   settlementToken: Address;
@@ -23,7 +24,8 @@ export type MerchantConfigInput = Omit<MerchantConfig, "metadata">;
 export class RegistryClient {
   constructor(
     private readonly publicClient: PublicClient,
-    private readonly address?: Address
+    private readonly address?: Address,
+    private readonly deploymentBlock: bigint = DEFAULT_REGISTRY_DEPLOYMENT_BLOCK
   ) {}
 
   private requireAddress(): Address {
@@ -65,7 +67,7 @@ export class RegistryClient {
       logs = await this.publicClient.getLogs({
         address: registryAddress,
         event: getAbiItem({ abi: MORVA_REGISTRY_ABI, name: "MerchantRegistered" }),
-        fromBlock: 0n,
+        fromBlock: this.deploymentBlock,
         toBlock: "latest",
       });
     } catch (err) {

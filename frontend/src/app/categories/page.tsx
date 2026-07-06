@@ -4,10 +4,10 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { SearchField } from "@/components/layout/search-field";
 import { BalancePill } from "@/components/checkout/balance-pill";
-import { AvatarTile } from "@/components/ui/avatar-tile";
+import { UserAvatar } from "@/components/auth/user-avatar";
 import { IconButton } from "@/components/ui/icon-button";
 import { accentClasses } from "@/components/ui/accent";
-import { CATEGORIES, UNIFIED_BALANCE } from "@/lib/mock-data";
+import { CATEGORIES } from "@/lib/mock-data";
 import type { Category, CategoryIcon } from "@/lib/types";
 
 const ICONS: Record<CategoryIcon, LucideIcon> = {
@@ -34,11 +34,11 @@ export default function CategoriesPage() {
         left={<SearchField placeholder="Search stalls and products" />}
         right={
           <>
-            <BalancePill balance={UNIFIED_BALANCE} />
+            <BalancePill />
             <IconButton aria-label="Cart">
               <ShoppingCart size={18} strokeWidth={1.6} className="text-ink" />
             </IconButton>
-            <AvatarTile label="AR" accent="purple" size="lg" className="rounded-full" />
+            <UserAvatar />
           </>
         }
       />

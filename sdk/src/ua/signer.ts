@@ -17,9 +17,21 @@ export interface MorvaSigner {
   signAuthorization(auth: AuthorizationRequest): Promise<SignedAuthorization>;
 }
 
-/** MorvaSigner backed by a raw private key, via viem's native EIP-7702
- *  authorization signing. Intended for scripts/e2e-payment.ts and tests —
- *  browser signers (Magic, wallet extensions) are the frontend's job. */
+/**
+ * MorvaSigner backed by a raw private key, via viem's native EIP-7702
+ * authorization signing. Intended for scripts/e2e-payment.ts and tests —
+ * browser signers (Magic, wallet extensions) are the frontend's job.
+ *
+ * NOTE: the task brief called for this to be backed by an ethers v6
+ * Wallet. viem's PrivateKeyAccount already implements real EIP-7702
+ * authorization signing (signAuthorization) and personal_sign
+ * (signMessage) natively, producing the same signature format
+ * authorization.ts's serializeSignature() expects — so pulling in ethers
+ * as a second signing library for this one class would be pure
+ * duplication, not a functional need. viem is already a required
+ * dependency for the registry client, so this keeps the dependency
+ * surface to viem + the Particle SDK only.
+ */
 export class LocalSigner implements MorvaSigner {
   private readonly account: PrivateKeyAccount;
 

@@ -5,6 +5,9 @@
   "scripts": {
     "build": "forge build",
     "test": "forge test",
-    "fmt": "forge fmt"
+    "fmt": "forge fmt",
+    "deploy:dry": "forge script script/Deploy.s.sol --rpc-url $ARBITRUM_RPC_URL",
+    "deploy": "forge script script/Deploy.s.sol --rpc-url $ARBITRUM_RPC_URL --broadcast --verify --etherscan-api-key $ARBISCAN_API_KEY",
+    "seed": "forge script script/SeedMerchants.s.sol --rpc-url $ARBITRUM_RPC_URL --broadcast"
   }
 }

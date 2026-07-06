@@ -1,7 +1,7 @@
 import { createPublicClient, erc20Abi, hexToBytes, http, type Hex } from "viem";
 import { arbitrum } from "viem/chains";
 import { CHAIN_ID, UA_TRANSACTION_STATUS, type UniversalAccount } from "@particle-network/universal-account-sdk";
-import { DEFAULT_ARBITRUM_RPC_URL } from "../config";
+import { DEFAULT_ARBITRUM_RPC_URL, DEFAULT_SETTLEMENT_TIMEOUT_MS } from "../config";
 import { InsufficientUnifiedBalance, MorvaSdkError, SettlementTimeout, UserRejectedSignature } from "../errors";
 import type { PaymentIntent } from "../intents";
 import { signPendingAuthorizations } from "./authorization";
@@ -10,8 +10,8 @@ import { getUnifiedBalance } from "./balance";
 
 export type PaymentStatus =
   | "building"
-  | "awaiting_authorization"
-  | "awaiting_signature"
+  | "authorizing"
+  | "signing"
   | "submitted"
   | "settled"
   | "failed";
@@ -28,7 +28,6 @@ export interface PayOptions {
   rpcUrl?: string;
 }
 
-const DEFAULT_SETTLEMENT_TIMEOUT_MS = 120_000;
 const POLL_INTERVAL_MS = 3_000;
 
 const FAILED_STATUS_CODES: number[] = [
@@ -65,13 +64,13 @@ export async function pay(
     onStatus
   );
 
-  onStatus("awaiting_authorization");
+  onStatus("authorizing");
   const authorizations = await tryAuthorizationStep(
     () => signPendingAuthorizations(transaction, signer),
     onStatus
   );
 
-  onStatus("awaiting_signature");
+  onStatus("signing");
   const signature = await tryAuthorizationStep(async () => {
     const messageBytes = hexToBytes(transaction.rootHash as Hex);
     return signer.signMessage(messageBytes);

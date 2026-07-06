@@ -30,6 +30,7 @@ export class BuyerSession {
     return pay(this.ua, this.signer, intent, {
       onStatus: opts?.onStatus,
       rpcUrl: this.config.rpcUrl,
+      settlementTimeoutMs: this.config.settlementTimeoutMs,
     });
   }
 }

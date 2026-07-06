@@ -11,7 +11,7 @@ export interface NavItem {
 }
 
 export const BUYER_NAV: NavItem[] = [
-  { label: "Plaza", href: "/", icon: Store, enabled: true },
+  { label: "Plaza", href: "/plaza", icon: Store, enabled: true },
   { label: "Explore", href: "/explore", icon: Compass, enabled: true },
   { label: "Categories", href: "/categories", icon: LayoutGrid, enabled: true },
   { label: "Orders", href: "/orders", icon: Receipt, enabled: true },

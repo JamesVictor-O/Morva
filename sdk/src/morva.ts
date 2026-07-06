@@ -16,7 +16,7 @@ export class Morva {
       chain: arbitrum,
       transport: http(config.rpcUrl ?? DEFAULT_ARBITRUM_RPC_URL),
     });
-    this.registry = new RegistryClient(publicClient, config.registryAddress);
+    this.registry = new RegistryClient(publicClient, config.registryAddress, config.registryDeploymentBlock);
   }
 
   async getMerchant(merchant: Address): Promise<MerchantConfig> {

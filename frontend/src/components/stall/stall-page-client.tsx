@@ -1,30 +1,30 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bell } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { BalancePill } from "@/components/checkout/balance-pill";
-import { CheckoutModal } from "@/components/checkout/checkout-modal";
+import { CartBar } from "@/components/checkout/cart-bar";
+import { QuantityStepper } from "@/components/checkout/quantity-stepper";
+import { UserAvatar } from "@/components/auth/user-avatar";
 import { AvatarTile } from "@/components/ui/avatar-tile";
 import { IconButton } from "@/components/ui/icon-button";
-import { Button } from "@/components/ui/button";
 import { MediaImage } from "@/components/ui/media-image";
-import { UNIFIED_BALANCE } from "@/lib/mock-data";
 import { accentClasses } from "@/components/ui/accent";
+import { useCart } from "@/lib/cart-context";
 import type { Product, Stall } from "@/lib/types";
 
 export function StallPageClient({ stall, products }: { stall: Stall; products: Product[] }) {
-  const [activeProduct, setActiveProduct] = useState<Product | null>(null);
   const { bg } = accentClasses(stall.accent);
+  const { quantityFor, setQuantity } = useCart();
 
   return (
     <AppShell variant="buyer">
       <Topbar
         left={
           <Link
-            href="/"
+            href="/plaza"
             className="flex items-center gap-2 text-[14px] text-ink-faint transition-colors hover:text-ink"
           >
             <ArrowLeft size={16} strokeWidth={1.6} />
@@ -33,16 +33,16 @@ export function StallPageClient({ stall, products }: { stall: Stall; products: P
         }
         right={
           <>
-            <BalancePill balance={UNIFIED_BALANCE} />
+            <BalancePill />
             <IconButton aria-label="Notifications">
               <Bell size={18} strokeWidth={1.6} className="text-ink" />
             </IconButton>
-            <AvatarTile label="AR" accent="purple" size="lg" className="rounded-full" />
+            <UserAvatar />
           </>
         }
       />
 
-      <main className="px-5 py-8 sm:px-8 lg:px-[34px] lg:py-10">
+      <main className="px-5 py-8 pb-28 sm:px-8 lg:px-[34px] lg:py-10 lg:pb-28">
         <div className={`flex flex-col gap-6 rounded-[28px] p-7 sm:flex-row sm:items-center sm:p-9 ${bg}`}>
           <AvatarTile label={stall.initial} accent={stall.accent} size="2xl" className="!bg-surface-solid" />
           <div className="min-w-0 flex-1">
@@ -84,9 +84,10 @@ export function StallPageClient({ stall, products }: { stall: Stall; products: P
                 </div>
                 <div className="flex items-center justify-between">
                   <p className="text-[22px] font-semibold text-ink">${product.priceUsd}</p>
-                  <Button onClick={() => setActiveProduct(product)} className="px-[26px] py-[11px] text-[15px]">
-                    Buy
-                  </Button>
+                  <QuantityStepper
+                    quantity={quantityFor(product.id)}
+                    onChange={(next) => setQuantity(stall.slug, product.id, next)}
+                  />
                 </div>
               </div>
             </div>
@@ -94,15 +95,7 @@ export function StallPageClient({ stall, products }: { stall: Stall; products: P
         </div>
       </main>
 
-      {activeProduct && (
-        <CheckoutModal
-          open={activeProduct !== null}
-          onClose={() => setActiveProduct(null)}
-          stall={stall}
-          product={activeProduct}
-          balance={UNIFIED_BALANCE}
-        />
-      )}
+      <CartBar stallSlug={stall.slug} />
     </AppShell>
   );
 }

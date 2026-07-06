@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/lib/auth-context";
+import { CartProvider } from "@/lib/cart-context";
 
 const jetBrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
@@ -29,7 +31,11 @@ export default function RootLayout({
         />
         <style>{`:root { --font-general-sans: 'General Sans', system-ui, sans-serif; }`}</style>
       </head>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <AuthProvider>
+          <CartProvider>{children}</CartProvider>
+        </AuthProvider>
+      </body>
     </html>
   );
 }

@@ -17,12 +17,17 @@ export async function signPendingAuthorizations(
   signer: MorvaSigner
 ): Promise<EIP7702Authorization[] | undefined> {
   const authorizations: EIP7702Authorization[] = [];
-  const nonceCache = new Map<number, string>();
+  // Keyed by chainId+nonce, not nonce alone: the authorization nonce is
+  // scoped per-chain, so two different chains can legitimately both be at
+  // nonce 0 for the same owner. Deduping on nonce alone would let one
+  // chain's signature be reused for another chain's authorization.
+  const authCache = new Map<string, string>();
 
   for (const userOp of transaction.userOps as IUserOpWithChain[]) {
     if (!userOp.eip7702Auth || userOp.eip7702Delegated) continue;
 
-    let signature = nonceCache.get(userOp.eip7702Auth.nonce);
+    const cacheKey = `${userOp.eip7702Auth.chainId}:${userOp.eip7702Auth.nonce}`;
+    let signature = authCache.get(cacheKey);
     if (!signature) {
       const signed = await signer.signAuthorization({
         contractAddress: userOp.eip7702Auth.address as `0x${string}`,
@@ -30,7 +35,7 @@ export async function signPendingAuthorizations(
         nonce: userOp.eip7702Auth.nonce,
       });
       signature = serializeSignature({ r: signed.r, s: signed.s, yParity: resolveYParity(signed) });
-      nonceCache.set(userOp.eip7702Auth.nonce, signature);
+      authCache.set(cacheKey, signature);
     }
 
     authorizations.push({ userOpHash: userOp.userOpHash, signature });

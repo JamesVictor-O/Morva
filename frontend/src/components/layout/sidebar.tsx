@@ -21,7 +21,7 @@ export function Sidebar({
     <aside
       className={`flex w-[236px] flex-none flex-col gap-9 border-r border-border-soft p-5 ${className}`}
     >
-      <Link href="/" className="flex items-center gap-[11px] px-1.5">
+      <Link href="/plaza" className="flex items-center gap-[11px] px-1.5">
         <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-ink text-[16px] font-semibold text-white">
           M
         </div>

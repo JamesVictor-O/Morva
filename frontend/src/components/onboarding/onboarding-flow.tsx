@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft, Check, Upload } from "lucide-react";
@@ -8,17 +8,30 @@ import { Button } from "../ui/button";
 import { AvatarTile } from "../ui/avatar-tile";
 import { StepIndicator } from "./step-indicator";
 import { accentClasses } from "../ui/accent";
+import { SignInGate } from "@/components/auth/sign-in-gate";
+import { useAuth } from "@/lib/auth-context";
 import type { Accent } from "@/lib/types";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
 const ACCENT_OPTIONS: Accent[] = ["green", "yellow", "peach", "purple", "beige"];
 
+type PayoutToken = "USDC" | "USDT" | "ETH" | "SOL";
+
+const PAYOUT_TOKENS: { id: PayoutToken; symbol: string; description: string }[] = [
+  { id: "USDC", symbol: "$", description: "A dollar, always worth a dollar" },
+  { id: "USDT", symbol: "$", description: "Another dollar-pegged stablecoin" },
+  { id: "ETH", symbol: "Ξ", description: "Native ether — price moves with the market" },
+  { id: "SOL", symbol: "◎", description: "Solana's native token — price moves with the market" },
+];
+
 interface OnboardingData {
   name: string;
   tagline: string;
   accent: Accent;
   payoutAddress: string;
+  payoutToken: PayoutToken;
+  logoPreviewUrl?: string;
 }
 
 const INITIAL_DATA: OnboardingData = {
@@ -26,12 +39,15 @@ const INITIAL_DATA: OnboardingData = {
   tagline: "",
   accent: "yellow",
   payoutAddress: "",
+  payoutToken: "USDC",
 };
 
 export function OnboardingFlow() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [data, setData] = useState<OnboardingData>(INITIAL_DATA);
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const { status } = useAuth();
 
   const initial = data.name.trim().charAt(0).toUpperCase() || "?";
   const canContinueIdentity = data.name.trim().length > 0;
@@ -41,9 +57,35 @@ export function OnboardingFlow() {
     setData((d) => ({ ...d, payoutAddress: "0x7a3f4b2c9e1d8f6a5c3b0e7d2f9a1c4b8e6d3f2a" }));
   }
 
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setData((d) => {
+      if (d.logoPreviewUrl) URL.revokeObjectURL(d.logoPreviewUrl);
+      return { ...d, logoPreviewUrl: url };
+    });
+  }
+
+  useEffect(() => {
+    return () => {
+      if (data.logoPreviewUrl) URL.revokeObjectURL(data.logoPreviewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (status !== "authenticated") {
+    return (
+      <SignInGate
+        title="Sign in to open your stall"
+        body="Create an account first — it only takes your email, and Magic sets up your payout wallet automatically."
+      />
+    );
+  }
+
   return (
     <div className="mx-auto flex min-h-screen max-w-[600px] flex-col px-5 py-10 sm:py-16">
-      <Link href="/" className="mb-8 flex items-center gap-2 text-[14px] text-ink-faint transition-colors hover:text-ink">
+      <Link href="/plaza" className="mb-8 flex items-center gap-2 text-[14px] text-ink-faint transition-colors hover:text-ink">
         <ArrowLeft size={16} strokeWidth={1.6} />
         Save & exit
       </Link>
@@ -91,10 +133,32 @@ export function OnboardingFlow() {
                   <div className="flex flex-col gap-5 sm:flex-row">
                     <div className="flex-1">
                       <Field label="Logo">
-                        <div className="flex h-24 flex-col items-center justify-center gap-1.5 rounded-2xl border border-dashed border-border-strong bg-surface-solid text-ink-quiet">
-                          <Upload size={22} strokeWidth={1.6} />
-                          <span className="text-[13px]">Upload</span>
-                        </div>
+                        <input
+                          ref={logoInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoChange}
+                          className="hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => logoInputRef.current?.click()}
+                          className="flex h-24 w-full flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl border border-dashed border-border-strong bg-surface-solid text-ink-quiet transition-colors hover:border-primary hover:text-ink"
+                        >
+                          {data.logoPreviewUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={data.logoPreviewUrl}
+                              alt="Stall logo preview"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <>
+                              <Upload size={22} strokeWidth={1.6} />
+                              <span className="text-[13px]">Upload</span>
+                            </>
+                          )}
+                        </button>
                       </Field>
                     </div>
                     <div className="flex-1">
@@ -171,17 +235,35 @@ export function OnboardingFlow() {
 
                 <div className="mt-6">
                   <Field label="You get paid in">
-                    <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface-solid px-[18px] py-[15px]">
-                      <span className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-accent-slate-bg text-[13px] font-semibold text-primary">
-                        $
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[15px] font-semibold text-ink">USDC</p>
-                        <p className="text-[13px] text-ink-faint">A dollar, always worth a dollar</p>
-                      </div>
-                      <span className="flex-none rounded-full bg-fill px-3 py-1.5 text-[12px] text-ink-faint">
-                        Fixed
-                      </span>
+                    <div className="flex flex-col gap-2.5">
+                      {PAYOUT_TOKENS.map((token) => {
+                        const selected = data.payoutToken === token.id;
+                        return (
+                          <button
+                            key={token.id}
+                            type="button"
+                            onClick={() => setData((d) => ({ ...d, payoutToken: token.id }))}
+                            className={`flex items-center gap-3 rounded-2xl border px-[18px] py-[15px] text-left transition-colors ${
+                              selected
+                                ? "border-primary bg-surface-solid"
+                                : "border-border bg-surface-solid hover:border-border-strong"
+                            }`}
+                          >
+                            <span className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full bg-accent-slate-bg text-[15px] font-semibold text-primary">
+                              {token.symbol}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[15px] font-semibold text-ink">{token.id}</p>
+                              <p className="text-[13px] text-ink-faint">{token.description}</p>
+                            </div>
+                            {selected && (
+                              <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-primary text-white">
+                                <Check size={14} strokeWidth={2.4} />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </Field>
                 </div>
@@ -210,7 +292,7 @@ export function OnboardingFlow() {
 
                 <div className="mt-5 flex flex-col gap-2.5">
                   <SummaryRow label="Payout" value={truncateAddress(data.payoutAddress)} mono />
-                  <SummaryRow label="Paid in" value="USDC" />
+                  <SummaryRow label="Paid in" value={data.payoutToken} />
                 </div>
 
                 <Button fullWidth className="mt-[26px]" onClick={() => setDone(true)}>
@@ -255,7 +337,7 @@ function SuccessPanel({
 
       <StallPreviewCard data={data} initial={initial} className="mt-[26px] w-full text-left" />
 
-      <Link href="/" className="mt-6 w-full">
+      <Link href="/plaza" className="mt-6 w-full">
         <Button variant="dark" fullWidth>
           View in the plaza
         </Button>
@@ -277,7 +359,16 @@ function StallPreviewCard({
   return (
     <div className={`overflow-hidden rounded-[26px] border border-border-soft bg-surface-solid ${className}`}>
       <div className={`flex h-[130px] p-[22px] ${bg}`}>
-        <div className="flex-1 rounded-2xl border border-dashed border-ink/15 bg-surface-solid/60 font-mono text-[11px] text-ink/40" />
+        {data.logoPreviewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={data.logoPreviewUrl}
+            alt=""
+            className="flex-1 rounded-2xl object-cover"
+          />
+        ) : (
+          <div className="flex-1 rounded-2xl border border-dashed border-ink/15 bg-surface-solid/60 font-mono text-[11px] text-ink/40" />
+        )}
       </div>
       <div className="flex items-center gap-[13px] p-5">
         <AvatarTile label={initial} accent={data.accent} size="lg" />
