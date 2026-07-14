@@ -11,8 +11,8 @@ export const MORVA_REGISTRY_ABI = [
         components: [
           { name: "settlementToken", type: "address" },
           { name: "settlementRecipient", type: "address" },
-          { name: "metadataURI", type: "string" },
           { name: "active", type: "bool" },
+          { name: "metadataURI", type: "string" },
         ],
       },
     ],
@@ -29,8 +29,8 @@ export const MORVA_REGISTRY_ABI = [
         components: [
           { name: "settlementToken", type: "address" },
           { name: "settlementRecipient", type: "address" },
-          { name: "metadataURI", type: "string" },
           { name: "active", type: "bool" },
+          { name: "metadataURI", type: "string" },
         ],
       },
     ],
@@ -55,8 +55,8 @@ export const MORVA_REGISTRY_ABI = [
         components: [
           { name: "settlementToken", type: "address" },
           { name: "settlementRecipient", type: "address" },
-          { name: "metadataURI", type: "string" },
           { name: "active", type: "bool" },
+          { name: "metadataURI", type: "string" },
         ],
       },
     ],
@@ -74,6 +74,12 @@ export const MORVA_REGISTRY_ABI = [
   {
     type: "event",
     name: "MerchantUpdated",
-    inputs: [{ name: "merchant", type: "address", indexed: true }],
+    inputs: [
+      { name: "merchant", type: "address", indexed: true },
+      { name: "settlementToken", type: "address", indexed: false },
+      { name: "settlementRecipient", type: "address", indexed: false },
+      { name: "active", type: "bool", indexed: false },
+      { name: "metadataURI", type: "string", indexed: false },
+    ],
   },
 ] as const;

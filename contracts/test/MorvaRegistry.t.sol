@@ -77,8 +77,8 @@ contract MorvaRegistryTest is Test {
         address newToken = makeAddr("newToken");
         address newRecipient = makeAddr("newRecipient");
 
-        vm.expectEmit(true, false, false, false, address(registry));
-        emit MorvaRegistry.MerchantUpdated(merchantA);
+        vm.expectEmit(true, true, true, true, address(registry));
+        emit MorvaRegistry.MerchantUpdated(merchantA, newToken, newRecipient, false, "ipfs://updated");
         registry.updateMerchant(_cfg(newToken, newRecipient, "ipfs://updated", false));
         vm.stopPrank();
 
@@ -89,13 +89,16 @@ contract MorvaRegistryTest is Test {
         assertFalse(stored.active);
     }
 
-    /// 6. setActive(false) -> getMerchant shows inactive; setActive from
-    /// unregistered reverts.
+    /// 6. setActive(false) -> getMerchant shows inactive, MerchantUpdated
+    /// carries the unchanged token/recipient/metadataURI alongside the new
+    /// active flag; setActive from unregistered reverts.
     function test_setActive_updatesFlag() public {
         vm.startPrank(merchantA);
         registry.registerMerchant(_cfg(token, recipient, "ipfs://a", true));
         assertTrue(registry.getMerchant(merchantA).active);
 
+        vm.expectEmit(true, true, true, true, address(registry));
+        emit MorvaRegistry.MerchantUpdated(merchantA, token, recipient, false, "ipfs://a");
         registry.setActive(false);
         assertFalse(registry.getMerchant(merchantA).active);
 

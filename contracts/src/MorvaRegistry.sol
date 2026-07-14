@@ -13,13 +13,22 @@ contract MorvaRegistry {
     /// @notice A merchant's settlement configuration.
     /// @param settlementToken ERC-20 the merchant is paid in (e.g. USDC on Arbitrum).
     /// @param settlementRecipient Address funds are sent to.
-    /// @param metadataURI Off-chain JSON: { name, logoUrl, description }.
     /// @param active Whether the merchant is currently accepting payments.
+    /// @param metadataURI Off-chain JSON: { name, logoUrl, description }.
+    /// @dev Field order is deliberate, not cosmetic: `active` sits directly
+    /// after `settlementRecipient` so it packs into the same storage slot
+    /// (two addresses don't fit together, but the 12 bytes left after one
+    /// address does fit a bool) — `metadataURI` is a dynamic type and would
+    /// always start a fresh slot regardless of where it's declared, so it's
+    /// last. This saves one SSTORE (~20k gas) on every registerMerchant and
+    /// updateMerchant call versus the original declaration order. Reordering
+    /// changes the ABI tuple order — safe only pre-deployment; if this ships
+    /// after a real deployment, it's a breaking change, not a refactor.
     struct MerchantConfig {
         address settlementToken;
         address settlementRecipient;
-        string metadataURI;
         bool active;
+        string metadataURI;
     }
 
     mapping(address merchant => MerchantConfig config) internal _merchants;
@@ -29,9 +38,16 @@ contract MorvaRegistry {
         address indexed merchant, address settlementToken, address settlementRecipient, string metadataURI
     );
 
-    /// @notice Emitted whenever a registered merchant's config changes
-    /// (via updateMerchant or setActive).
-    event MerchantUpdated(address indexed merchant);
+    /// @notice Emitted whenever a registered merchant's config changes (via
+    /// updateMerchant or setActive), carrying the full resulting config —
+    /// not just the merchant address — so an off-chain indexer can
+    /// reconstruct complete history from events alone, without an
+    /// archive-node getMerchant() call at each historical block. This is
+    /// what actually backs the "history stays readable through past
+    /// events" guarantee described below; a merchant-only event wouldn't.
+    event MerchantUpdated(
+        address indexed merchant, address settlementToken, address settlementRecipient, bool active, string metadataURI
+    );
 
     /// @notice Thrown when `msg.sender` is already registered.
     error AlreadyRegistered();
@@ -67,18 +83,21 @@ contract MorvaRegistry {
 
         _merchants[msg.sender] = cfg;
 
-        emit MerchantUpdated(msg.sender);
+        emit MerchantUpdated(msg.sender, cfg.settlementToken, cfg.settlementRecipient, cfg.active, cfg.metadataURI);
     }
 
     /// @notice Flips `msg.sender`'s active flag without touching any other
     /// field. Use this to deactivate instead of deleting — history stays
     /// readable through past events and getMerchant.
     function setActive(bool active) external {
-        if (_merchants[msg.sender].settlementRecipient == address(0)) revert NotRegistered();
+        MerchantConfig storage merchant = _merchants[msg.sender];
+        if (merchant.settlementRecipient == address(0)) revert NotRegistered();
 
-        _merchants[msg.sender].active = active;
+        merchant.active = active;
 
-        emit MerchantUpdated(msg.sender);
+        emit MerchantUpdated(
+            msg.sender, merchant.settlementToken, merchant.settlementRecipient, active, merchant.metadataURI
+        );
     }
 
     /// @notice Reads a merchant's config. Returns a zeroed struct for an
