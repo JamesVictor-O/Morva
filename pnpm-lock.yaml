@@ -10,6 +10,9 @@ importers:
 
   frontend:
     dependencies:
+      '@morva/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@particle-network/universal-account-sdk':
         specifier: 2.0.3
         version: 2.0.3(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.4.3)

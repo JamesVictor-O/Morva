@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@morva/sdk": "workspace:*",
     "@particle-network/universal-account-sdk": "2.0.3",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.23.0",

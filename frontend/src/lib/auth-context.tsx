@@ -1,12 +1,13 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { MagicUserMetadata } from "magic-sdk";
 import type { Address } from "viem";
 import { getMagic } from "./magic";
 import { fetchUnifiedBalance, particleConfigured } from "./particle-balance";
 import type { UnifiedBalance } from "./types";
-import { SignInModal } from "@/components/auth/sign-in-modal";
+import { AuthErrorModal } from "@/components/auth/auth-error-modal";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 export type BalanceStatus = "idle" | "loading" | "ready" | "error";
@@ -22,11 +23,13 @@ interface AuthContextValue {
   /** False when `NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY` isn't set — sign-in will
    *  surface an explanatory error instead of silently doing nothing. */
   configured: boolean;
-  signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
-  /** Opens the sign-in modal. If the user completes it, `redirectTo` (when
-   *  given) is where they're sent — used by CTAs that point at a route the
-   *  visitor hasn't earned access to yet. */
+  /** Opens Magic's own hosted sign-in UI (email + OTP, entirely inside its
+   *  iframe overlay — nothing custom to render here). If the visitor
+   *  completes it, `redirectTo` (when given) is where they're sent — used
+   *  by CTAs that point at a route the visitor hasn't earned access to
+   *  yet. Closing Magic's overlay without finishing is a no-op, not an
+   *  error. */
   requestSignIn: (redirectTo?: string) => void;
   /** Cross-chain balance, read live from the buyer's Particle Universal
    *  Account (EIP-7702 mode) once signed in. Never populated with mock
@@ -49,11 +52,12 @@ function readUser(info: MagicUserMetadata): AuthUser {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [balance, setBalance] = useState<UnifiedBalance | null>(null);
   const [balanceStatus, setBalanceStatus] = useState<BalanceStatus>("idle");
-  const [modal, setModal] = useState<{ open: boolean; redirectTo?: string }>({ open: false });
+  const [authError, setAuthError] = useState<string | null>(null);
   const configured = Boolean(process.env.NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY);
 
   const loadBalance = useCallback(async (address: Address | null) => {
@@ -71,6 +75,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Shared by the mount-time session check and a fresh sign-in — both end
+  // with the same "we have a logged-in Magic user" state to apply.
+  const applySession = useCallback(
+    (info: MagicUserMetadata) => {
+      setUser(readUser(info));
+      setStatus("authenticated");
+      void loadBalance((info.wallets.ethereum?.publicAddress as Address | undefined) ?? null);
+    },
+    [loadBalance]
+  );
+
   useEffect(() => {
     // The `await` below yields a microtask before any setState runs, so this
     // never resolves synchronously within the effect's commit — even for the
@@ -87,28 +102,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setStatus("unauthenticated");
           return;
         }
-        const info = await magic.user.getInfo();
-        setUser(readUser(info));
-        setStatus("authenticated");
-        void loadBalance((info.wallets.ethereum?.publicAddress as Address | undefined) ?? null);
+        applySession(await magic.user.getInfo());
       })
       .catch(() => setStatus("unauthenticated"));
-  }, [loadBalance]);
-
-  const signIn = useCallback(
-    async (email: string) => {
-      const magic = getMagic();
-      if (!magic) {
-        throw new Error("Sign-in isn't configured yet — set NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY.");
-      }
-      await magic.auth.loginWithEmailOTP({ email, showUI: true });
-      const info = await magic.user.getInfo();
-      setUser(readUser(info));
-      setStatus("authenticated");
-      void loadBalance((info.wallets.ethereum?.publicAddress as Address | undefined) ?? null);
-    },
-    [loadBalance]
-  );
+  }, [applySession]);
 
   const signOut = useCallback(async () => {
     const magic = getMagic();
@@ -119,9 +116,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setBalanceStatus("idle");
   }, []);
 
-  const requestSignIn = useCallback((redirectTo?: string) => {
-    setModal({ open: true, redirectTo });
-  }, []);
+  const requestSignIn = useCallback(
+    (redirectTo?: string) => {
+      const magic = getMagic();
+      if (!magic) {
+        setAuthError("Sign-in isn't configured yet — set NEXT_PUBLIC_MAGIC_PUBLISHABLE_KEY.");
+        return;
+      }
+
+      // Magic renders its own overlay for the whole flow (email, OTP,
+      // everything) — we just wait for it to settle. Closing that overlay
+      // without finishing rejects the promise, confirmed live: the
+      // "closed-by-user" event does NOT fire for this (it apparently only
+      // covers other dismissal paths), and the rejection isn't one of the
+      // SDK's specific cancellation codes either — it's a generic
+      // `MagicRPCError` (code -32603) whose message happens to read "User
+      // canceled action." Matching on that text is the only thing that
+      // actually distinguishes a cancel from a real failure here.
+      magic.wallet
+        .connectWithUI()
+        .then(async () => {
+          applySession(await magic.user.getInfo());
+          if (redirectTo) router.push(redirectTo);
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          if (/cancel/i.test(message)) return;
+          setAuthError(message || "Something went wrong. Try again.");
+        });
+    },
+    [applySession, router]
+  );
 
   const refreshBalance = useCallback(async () => {
     await loadBalance((user?.publicAddress as Address | null) ?? null);
@@ -132,23 +157,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       status,
       user,
       configured,
-      signIn,
       signOut,
       requestSignIn,
       balance,
       balanceStatus,
       refreshBalance,
     }),
-    [status, user, configured, signIn, signOut, requestSignIn, balance, balanceStatus, refreshBalance]
+    [status, user, configured, signOut, requestSignIn, balance, balanceStatus, refreshBalance]
   );
 
   return (
     <AuthContext.Provider value={value}>
       {children}
-      <SignInModal
-        open={modal.open}
-        redirectTo={modal.redirectTo}
-        onClose={() => setModal({ open: false })}
+      <AuthErrorModal
+        message={authError}
+        onRetry={() => {
+          setAuthError(null);
+          requestSignIn();
+        }}
+        onClose={() => setAuthError(null)}
       />
     </AuthContext.Provider>
   );

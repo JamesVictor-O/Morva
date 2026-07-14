@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import type { LucideIcon } from "lucide-react";
 import { ArrowRight, ArrowUpRight, CheckCircle2, Wallet, Zap } from "lucide-react";
 import { AvatarTile } from "@/components/ui/avatar-tile";
@@ -6,7 +7,7 @@ import { MediaImage } from "@/components/ui/media-image";
 import { accentClasses } from "@/components/ui/accent";
 import { HeaderAuthActions } from "@/components/auth/header-auth-actions";
 import { ProtectedCta } from "@/components/auth/protected-cta";
-import { PRODUCTS, STALLS, UNIFIED_BALANCE, getFeaturedStall, getStallBySlug } from "@/lib/mock-data";
+import { STALLS, getStallBySlug } from "@/lib/mock-data";
 import type { Stall } from "@/lib/types";
 
 const GITHUB_URL = "https://github.com/JamesVictor-O/Morva";
@@ -58,8 +59,6 @@ const STEPS = [
 const PREVIEW_SLUGS = ["verde-botanicals", "golden-hour-bakery", "rue-and-co", "field-notes-coffee", "kinfolk-ceramics"];
 
 export default function LandingPage() {
-  const featured = getFeaturedStall();
-  const featuredProduct = PRODUCTS.find((product) => product.stallId === featured.id);
   const previewStalls = PREVIEW_SLUGS.map((slug) => getStallBySlug(slug)).filter((s): s is Stall => Boolean(s));
   const [bigPreview, ...restPreview] = previewStalls;
 
@@ -68,7 +67,7 @@ export default function LandingPage() {
       <SiteHeader />
 
       <main>
-        <Hero featured={featured} featuredProduct={featuredProduct} />
+        <Hero />
         <TrustMarquee />
         <Thesis />
         <FeatureTriptych />
@@ -114,113 +113,67 @@ function SiteHeader() {
   );
 }
 
-function Hero({ featured, featuredProduct }: { featured: Stall; featuredProduct?: (typeof PRODUCTS)[number] }) {
-  const { bg, fg } = accentClasses(featured.accent);
-
+function Hero() {
   return (
-    <section className="mx-auto grid max-w-[1200px] gap-12 px-5 pb-16 pt-14 sm:px-8 sm:pt-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-12 lg:px-14 lg:pb-20 lg:pt-24">
-      <div>
-        <div className="inline-flex items-center gap-2.5 rounded-full border border-border-soft bg-surface-solid px-4 py-1.5 text-[13px] text-ink-soft">
-          <span className="h-[7px] w-[7px] rounded-full bg-success-fg" />
-          One balance. Every stall. Zero crypto in your way.
-        </div>
-        <h1 className="mt-6 text-[44px] font-semibold leading-[1.04] tracking-tight text-ink sm:text-[58px] lg:text-[68px]">
-          Shopping that just
-          <br />
-          happens to run
-          <br />
-          on crypto.
-        </h1>
-        <p className="mt-6 max-w-[500px] text-[17px] leading-[1.55] text-ink-soft sm:text-[19px]">
-          Morva is a plaza of independent stalls. Browse, tap buy, pay from one
-          balance. No chains, no gas, no wallets to wrangle — it feels like any
-          shop you already love.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center gap-4">
-          <ProtectedCta href="/plaza" className="px-7 py-4 text-[16px]">
-            Start shopping
-          </ProtectedCta>
-          <ProtectedCta href="/merchant/onboarding" variant="ghost" className="px-6 py-4 text-[16px]">
-            Open your stall
-            <ArrowRight size={17} strokeWidth={1.8} />
-          </ProtectedCta>
-        </div>
-        <div className="mt-9 flex flex-wrap items-center gap-6 sm:gap-8">
-          <Stat value={`${STALLS.length}+`} label="stalls open" />
-          <div className="hidden h-9 w-px bg-border sm:block" />
-          <Stat value="One tap" label="to check out" />
-          <div className="hidden h-9 w-px bg-border sm:block" />
-          <Stat value="$0" label="gas, ever" />
+    <section className="relative flex min-h-[calc(100dvh-73px)] flex-col overflow-hidden bg-app-bg">
+      <div className="mx-auto w-full max-w-[1320px] px-5 pt-8 sm:px-8 sm:pt-10 lg:px-14 lg:pt-10">
+        <div className="inline-flex flex-col gap-2">
+          <p className="font-mono text-[12px] font-medium uppercase leading-[1.5] tracking-[0.14em] text-ink sm:text-[20px]">
+            Shopping
+            <br />
+            that moves
+            <br />
+            with you.
+          </p>
+          <span className="h-px w-9 bg-ink" />
         </div>
       </div>
 
-      <div className="relative h-[420px] sm:h-[480px] lg:h-[540px]">
-        <div className={`absolute inset-0 overflow-hidden rounded-[32px] ${bg}`}>
-          <MediaImage
-            src={featured.photoUrl}
-            alt={featured.name}
-            sizes="(min-width: 1024px) 45vw, 100vw"
-            aspectRatio="1 / 1"
+      <div className="relative mx-auto flex w-full max-w-[1320px] min-h-[260px] flex-1 items-center justify-center overflow-hidden px-5 py-4 sm:min-h-[380px] sm:px-8 lg:min-h-0 lg:px-14">
+        <h1
+          className="pointer-events-none select-none whitespace-nowrap text-center font-semibold leading-none tracking-tight text-ink"
+          style={{ fontSize: "clamp(2.75rem, 11vw, 12.5rem)" }}
+        >
+          MORVA
+        </h1>
+
+        <div
+          className="absolute left-1/2 top-1/2 z-10 aspect-[523/1284] w-[10vw] min-w-[120px] max-w-[240px] -translate-x-1/2 -translate-y-[46%]"
+          style={{ filter: "drop-shadow(0 18px 26px rgba(22,22,26,0.28))" }}
+        >
+          <Image
+            src="/hero-photos/model-tote-cutout-523x1284.png"
+            alt="A Morva shopper carrying a tote bag from the plaza"
+            fill
+            sizes="240px"
+            quality={80}
             priority
-            className="absolute inset-0 h-full w-full"
+            className="object-contain object-bottom"
           />
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
-          <div className="absolute left-6 top-6 flex items-center gap-3">
-            <AvatarTile label={featured.initial} accent={featured.accent} size="xl" className="bg-surface-solid" />
-            <div>
-              <p className={`text-[16px] font-semibold ${fg}`}>{featured.name}</p>
-              <p className={`text-[13px] opacity-80 ${fg}`}>{featured.tagline}</p>
-            </div>
-          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto flex w-full max-w-[1320px] flex-col gap-6 px-5 pb-8 pt-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-8 sm:px-8 sm:pb-10 lg:px-14 lg:pb-20">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+          <ProtectedCta href="/plaza" variant="dark" className="w-full justify-center px-7 py-4 text-[15px] uppercase tracking-[0.04em] sm:w-auto">
+            Shop now
+          </ProtectedCta>
+          <ProtectedCta href="/merchant/onboarding" variant="ghost" className="w-full justify-center px-6 py-4 text-[15px] uppercase tracking-[0.04em] sm:w-auto">
+            Open your stall
+            <ArrowRight size={16} strokeWidth={1.8} />
+          </ProtectedCta>
         </div>
 
-        {featuredProduct && (
-          <div
-            className="absolute -bottom-6 -left-4 w-[300px] rounded-[24px] border border-border-soft bg-surface-solid p-6 shadow-[0_20px_60px_rgba(22,22,26,0.12)] sm:w-[326px]"
-            style={{ animation: "morva-float 5s ease-in-out infinite" }}
-          >
-            <div className="flex items-center gap-3">
-              <MediaImage
-                src={featuredProduct.photoUrl}
-                alt={featuredProduct.name}
-                sizes="38px"
-                aspectRatio="1 / 1"
-                className={`w-[38px] flex-none rounded-[11px] ${bg}`}
-                fallback={<AvatarTile label={featured.initial} accent={featured.accent} size="md" />}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[14px] font-semibold text-ink">{featuredProduct.name}</p>
-                <p className="truncate text-[12px] text-ink-faint">{featured.name}</p>
-              </div>
-            </div>
-            <p className="mt-4 text-[36px] font-semibold leading-none tracking-tight text-ink">
-              ${featuredProduct.priceUsd.toFixed(2)}
-            </p>
-            <div className="mt-3.5 flex items-center rounded-2xl border border-border-soft px-4 py-3">
-              <div className="flex-1">
-                <p className="text-[12px] text-ink-soft">From your balance</p>
-                <p className="text-[15px] font-semibold text-ink">${UNIFIED_BALANCE.totalUsd.toFixed(2)}</p>
-              </div>
-              <span className="rounded-full bg-fill px-2.5 py-1 text-[11px] text-ink-faint">
-                {UNIFIED_BALANCE.chains.length} networks ⌄
-              </span>
-            </div>
-            <div className="mt-3.5 w-full rounded-full bg-primary py-3 text-center text-[15px] font-semibold text-primary-ink">
-              Pay ${featuredProduct.priceUsd.toFixed(2)}
-            </div>
-          </div>
-        )}
+        <div className="flex flex-col items-start gap-2 text-left sm:items-end sm:text-right">
+          <p className="font-mono text-[12px] font-medium uppercase leading-[1.5] tracking-[0.14em] text-ink sm:text-[13px]">
+            The plaza
+            <br />
+            {STALLS.length}+ stalls open
+          </p>
+          <span className="h-px w-9 bg-ink" />
+        </div>
       </div>
     </section>
-  );
-}
-
-function Stat({ value, label }: { value: string; label: string }) {
-  return (
-    <div>
-      <div className="text-[24px] font-semibold text-ink">{value}</div>
-      <div className="mt-0.5 text-[13px] text-ink-faint">{label}</div>
-    </div>
   );
 }
 
