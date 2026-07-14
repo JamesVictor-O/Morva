@@ -31,6 +31,17 @@ export class RegistryNotConfigured extends MorvaSdkError {
   }
 }
 
+export class RegistryDeploymentBlockRequired extends MorvaSdkError {
+  constructor() {
+    super(
+      "getAllMerchants() needs registryDeploymentBlock set in MorvaConfig — it defaults to block 0, " +
+        "and scanning MerchantRegistered logs from genesis is rejected or throttled by most RPC " +
+        "providers. Set it to the block MorvaRegistry was actually deployed at."
+    );
+    this.name = "RegistryDeploymentBlockRequired";
+  }
+}
+
 export class InsufficientUnifiedBalance extends MorvaSdkError {
   constructor(
     public readonly requiredUsd: string,

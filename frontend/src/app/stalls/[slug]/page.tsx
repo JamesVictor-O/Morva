@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
-import { getProductsByStallId, getStallBySlug, STALLS } from "@/lib/mock-data";
+import { getStallBySlug } from "@/lib/data/stalls";
+import { getProductsByStallId } from "@/lib/data/products";
 import { StallPageClient } from "@/components/stall/stall-page-client";
 
-export function generateStaticParams() {
-  return STALLS.map((stall) => ({ slug: stall.slug }));
-}
+// Stalls are created by merchants after deploy, not known at build time —
+// no generateStaticParams; each slug renders on request instead.
+export const dynamic = "force-dynamic";
 
 export default async function StallPage({
   params,
@@ -12,10 +13,10 @@ export default async function StallPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const stall = getStallBySlug(slug);
+  const stall = await getStallBySlug(slug);
   if (!stall) notFound();
 
-  const products = getProductsByStallId(stall.id);
+  const products = await getProductsByStallId(stall.id);
 
   return <StallPageClient stall={stall} products={products} />;
 }

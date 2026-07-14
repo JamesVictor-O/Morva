@@ -10,6 +10,7 @@ import { StepIndicator } from "./step-indicator";
 import { accentClasses } from "../ui/accent";
 import { SignInGate } from "@/components/auth/sign-in-gate";
 import { useAuth } from "@/lib/auth-context";
+import { createStall } from "@/lib/actions/stalls";
 import type { Accent } from "@/lib/types";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
@@ -31,6 +32,7 @@ interface OnboardingData {
   accent: Accent;
   payoutAddress: string;
   payoutToken: PayoutToken;
+  logoFile?: File;
   logoPreviewUrl?: string;
 }
 
@@ -46,15 +48,19 @@ export function OnboardingFlow() {
   const [step, setStep] = useState(0);
   const [done, setDone] = useState(false);
   const [data, setData] = useState<OnboardingData>(INITIAL_DATA);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [createdSlug, setCreatedSlug] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const { status } = useAuth();
+  const { status, user } = useAuth();
 
   const initial = data.name.trim().charAt(0).toUpperCase() || "?";
   const canContinueIdentity = data.name.trim().length > 0;
   const canContinuePayout = data.payoutAddress.trim().length > 0;
 
   function handleConnect() {
-    setData((d) => ({ ...d, payoutAddress: "0x7a3f4b2c9e1d8f6a5c3b0e7d2f9a1c4b8e6d3f2a" }));
+    if (!user?.publicAddress) return;
+    setData((d) => ({ ...d, payoutAddress: user.publicAddress! }));
   }
 
   function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -63,8 +69,30 @@ export function OnboardingFlow() {
     const url = URL.createObjectURL(file);
     setData((d) => {
       if (d.logoPreviewUrl) URL.revokeObjectURL(d.logoPreviewUrl);
-      return { ...d, logoPreviewUrl: url };
+      return { ...d, logoFile: file, logoPreviewUrl: url };
     });
+  }
+
+  async function handleOpenStall() {
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const formData = new FormData();
+      formData.set("name", data.name);
+      formData.set("tagline", data.tagline);
+      formData.set("accent", data.accent);
+      formData.set("payoutAddress", data.payoutAddress);
+      formData.set("payoutToken", data.payoutToken);
+      if (data.logoFile) formData.set("logo", data.logoFile);
+
+      const result = await createStall(formData);
+      setCreatedSlug(result.slug);
+      setDone(true);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   useEffect(() => {
@@ -92,7 +120,7 @@ export function OnboardingFlow() {
 
       <AnimatePresence mode="wait">
         {done ? (
-          <SuccessPanel key="success" data={data} initial={initial} />
+          <SuccessPanel key="success" data={data} initial={initial} slug={createdSlug} />
         ) : (
           <motion.div
             key={`step-${step}`}
@@ -295,9 +323,10 @@ export function OnboardingFlow() {
                   <SummaryRow label="Paid in" value={data.payoutToken} />
                 </div>
 
-                <Button fullWidth className="mt-[26px]" onClick={() => setDone(true)}>
-                  Open stall
+                <Button fullWidth className="mt-[26px]" onClick={handleOpenStall} disabled={submitting}>
+                  {submitting ? "Opening your stall…" : "Open stall"}
                 </Button>
+                {submitError && <p className="mt-3 text-[13px] text-error-fg">{submitError}</p>}
               </>
             )}
           </motion.div>
@@ -310,9 +339,11 @@ export function OnboardingFlow() {
 function SuccessPanel({
   data,
   initial,
+  slug,
 }: {
   data: OnboardingData;
   initial: string;
+  slug: string | null;
 }) {
   const { bg } = accentClasses(data.accent);
   return (
@@ -337,7 +368,7 @@ function SuccessPanel({
 
       <StallPreviewCard data={data} initial={initial} className="mt-[26px] w-full text-left" />
 
-      <Link href="/plaza" className="mt-6 w-full">
+      <Link href={slug ? `/stalls/${slug}` : "/plaza"} className="mt-6 w-full">
         <Button variant="dark" fullWidth>
           View in the plaza
         </Button>

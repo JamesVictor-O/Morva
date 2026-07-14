@@ -17,6 +17,7 @@ export {
   MerchantInactive,
   MerchantNotFound,
   MorvaSdkError,
+  RegistryDeploymentBlockRequired,
   RegistryNotConfigured,
   SettlementTimeout,
   UserRejectedSignature,

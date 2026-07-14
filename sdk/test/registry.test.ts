@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PublicClient } from "viem";
 import { RegistryClient } from "../src/registry/client";
-import { MerchantNotFound, RegistryNotConfigured } from "../src/errors";
+import { MerchantNotFound, RegistryDeploymentBlockRequired, RegistryNotConfigured } from "../src/errors";
 
 const REGISTRY = "0x9999999999999999999999999999999999999999" as const;
 const ZERO = "0x0000000000000000000000000000000000000000" as const;
@@ -72,10 +72,19 @@ describe("RegistryClient", () => {
       { args: { merchant: MERCHANT_B } },
     ]);
     const publicClient = mockPublicClient({ readContract, getLogs });
-    const client = new RegistryClient(publicClient, REGISTRY);
+    const client = new RegistryClient(publicClient, REGISTRY, 100n);
 
     const merchants = await client.getAllMerchants();
     expect(merchants).toHaveLength(1);
     expect(merchants[0].address).toBe(MERCHANT_A);
+  });
+
+  it("getAllMerchants refuses to scan from genesis when deploymentBlock is left at its unsafe default", async () => {
+    const getLogs = vi.fn();
+    const publicClient = mockPublicClient({ getLogs });
+    const client = new RegistryClient(publicClient, REGISTRY); // no deploymentBlock passed — defaults to 0n
+
+    await expect(client.getAllMerchants()).rejects.toBeInstanceOf(RegistryDeploymentBlockRequired);
+    expect(getLogs).not.toHaveBeenCalled();
   });
 });

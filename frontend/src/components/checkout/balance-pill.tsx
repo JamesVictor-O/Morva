@@ -2,15 +2,31 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, RefreshCw } from "lucide-react";
+import { Check, ChevronDown, Copy, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { ChainBreakdown } from "./chain-breakdown";
+
+function truncateAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
 
 /** Reads live from the buyer's Particle Universal Account via AuthContext —
  *  no `balance` prop, so every caller always shows the same real number. */
 export function BalancePill() {
   const [open, setOpen] = useState(false);
-  const { balance, balanceStatus, refreshBalance } = useAuth();
+  const [copied, setCopied] = useState(false);
+  const { user, balance, balanceStatus, refreshBalance } = useAuth();
+
+  async function handleCopyAddress() {
+    if (!user?.publicAddress) return;
+    try {
+      await navigator.clipboard.writeText(user.publicAddress);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard access denied — not worth surfacing an error for.
+    }
+  }
 
   const loading = balanceStatus === "loading" || balanceStatus === "idle";
   const totalLabel = loading ? "…" : balance ? `$${balance.totalUsd.toFixed(2)}` : "—";
@@ -52,6 +68,22 @@ export function BalancePill() {
                   <RefreshCw size={13} className={balanceStatus === "loading" ? "animate-spin" : ""} />
                 </button>
               </div>
+
+              {user?.publicAddress && (
+                <button
+                  type="button"
+                  onClick={handleCopyAddress}
+                  title="Copy wallet address"
+                  className="mt-1 flex items-center gap-1.5 font-mono text-[12.5px] text-ink-faint transition-colors hover:text-ink-soft"
+                >
+                  {truncateAddress(user.publicAddress)}
+                  {copied ? (
+                    <Check size={12} strokeWidth={2.2} className="text-success-fg" />
+                  ) : (
+                    <Copy size={12} strokeWidth={1.8} />
+                  )}
+                </button>
+              )}
 
               {balanceStatus === "error" ? (
                 <>

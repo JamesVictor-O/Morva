@@ -11,20 +11,33 @@ import { ChainBreakdown } from "@/components/checkout/chain-breakdown";
 import { SignInGate } from "@/components/auth/sign-in-gate";
 import { useAuth } from "@/lib/auth-context";
 import { useCart, type ResolvedCartLine } from "@/lib/cart-context";
+import { getMagic } from "@/lib/magic";
+import { MagicSigner } from "@/lib/magic-signer";
+import { createPendingOrder, markOrderFailed, markOrderSettled } from "@/lib/actions/orders";
 import type { Stall } from "@/lib/types";
+import { createMorva, type PaymentStatus as SdkPaymentStatus } from "@morva/sdk";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
-const SIMULATED_SETTLE_MS = 1800;
 
 type Step = "review" | "processing" | "success";
 
-/** Placeholder order numbering until a real order backend exists — kept as
- *  a standalone function (rather than inline in the component) since
- *  Date.now() is an impure call the React Compiler's rules disallow inside
- *  component bodies. */
-function generateOrderNumber(): string {
-  return `ORD-${Date.now().toString().slice(-8)}`;
-}
+// Only USDC on Arbitrum One is wired up today — this exact address is the
+// one already proven live by sdk/scripts/e2e-payment.ts (Gate 2), not a
+// freshly-typed one. A stall configured for any other payout token shows a
+// clear error at pay time rather than attempting a transfer to a guessed
+// contract address.
+const TOKEN_ADDRESSES: Record<string, `0x${string}`> = {
+  USDC: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+};
+
+const STATUS_LABEL: Record<SdkPaymentStatus, string> = {
+  building: "Preparing your payment…",
+  authorizing: "Authorizing your wallet…",
+  signing: "Waiting for your signature…",
+  submitted: "Submitting…",
+  settled: "Settled!",
+  failed: "Something went wrong.",
+};
 
 interface CompletedOrder {
   orderNumber: string;
@@ -41,6 +54,8 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
   const [email, setEmail] = useState(user?.email ?? "");
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null);
+  const [payStatusLabel, setPayStatusLabel] = useState<string | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
 
   if (status !== "authenticated") {
     return (
@@ -67,23 +82,65 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
   const shortfall = total - (balance?.totalUsd ?? 0);
 
   async function handlePay() {
-    if (!covers) return;
+    if (!covers || !user?.publicAddress) return;
+
+    const tokenAddress = TOKEN_ADDRESSES[stall.payoutToken ?? "USDC"];
+    if (!tokenAddress) {
+      setPayError(`This stall settles in ${stall.payoutToken}, which checkout doesn't support yet.`);
+      return;
+    }
+
     setStep("processing");
+    setPayError(null);
+    setPayStatusLabel(STATUS_LABEL.building);
+
+    let orderId: string | undefined;
     try {
-      // No live payment execution wired up yet — this is the integration
-      // point for the Morva checkout SDK: build a PaymentIntent for this
-      // stall's settlement config, then session.pay(intent, { onStatus }).
-      await new Promise<void>((resolve) => setTimeout(resolve, SIMULATED_SETTLE_MS));
-      setCompletedOrder({
-        orderNumber: generateOrderNumber(),
-        lines,
-        total,
-        email,
+      const pending = await createPendingOrder({
+        stallId: stall.id,
+        buyerAddress: user.publicAddress,
+        buyerEmail: email || undefined,
+        lines: lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
       });
+      orderId = pending.orderId;
+
+      const magic = getMagic();
+      if (!magic) throw new Error("Sign-in isn't configured.");
+
+      const morva = createMorva({
+        particle: {
+          projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID!,
+          projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY!,
+          projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_ID!,
+        },
+      });
+      const signer = new MagicSigner(magic, user.publicAddress as `0x${string}`);
+      const session = await morva.connect(signer);
+
+      const intent = morva.createDirectIntent({
+        amount: total.toFixed(2),
+        orderId: pending.orderNumber,
+        settlementToken: tokenAddress,
+        settlementRecipient: stall.payoutAddress as `0x${string}`,
+      });
+
+      const result = await session.pay(intent, {
+        onStatus: (status) => setPayStatusLabel(STATUS_LABEL[status]),
+      });
+
+      await markOrderSettled(pending.orderId, result);
+
+      setCompletedOrder({ orderNumber: pending.orderNumber, lines, total, email });
       setStep("success");
       cart.clear();
-    } catch {
+    } catch (err) {
+      if (orderId) {
+        await markOrderFailed(orderId, err instanceof Error ? err.message : "Unknown error").catch(() => {});
+      }
+      setPayError(err instanceof Error ? err.message : "Payment failed. Try again.");
       setStep("review");
+    } finally {
+      setPayStatusLabel(null);
     }
   }
 
@@ -252,11 +309,15 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
             disabled={balanceLoading || balanceError || !covers || step === "processing"}
           >
             {step === "processing"
-              ? "Moving your funds…"
+              ? (payStatusLabel ?? "Moving your funds…")
               : balanceLoading
                 ? "Checking your balance…"
                 : `Pay $${total.toFixed(2)}`}
           </Button>
+
+          {payError && (
+            <p className="mt-3 text-center text-[13px] text-error-fg">{payError}</p>
+          )}
 
           <p className="mt-4 text-center text-[12px] leading-[1.5] text-ink-whisper">
             By paying you agree to Morva&apos;s terms.

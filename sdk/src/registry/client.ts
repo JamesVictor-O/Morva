@@ -8,7 +8,7 @@ import {
 } from "viem";
 import { MORVA_REGISTRY_ABI } from "./abi";
 import { fetchMerchantMetadata, type MerchantMetadata } from "./metadata";
-import { MerchantNotFound, MorvaSdkError, RegistryNotConfigured } from "../errors";
+import { MerchantNotFound, MorvaSdkError, RegistryDeploymentBlockRequired, RegistryNotConfigured } from "../errors";
 import { DEFAULT_REGISTRY_DEPLOYMENT_BLOCK } from "../config";
 
 export interface MerchantConfig {
@@ -61,6 +61,7 @@ export class RegistryClient {
 
   async getAllMerchants(): Promise<Array<{ address: Address } & MerchantConfig>> {
     const registryAddress = this.requireAddress();
+    if (this.deploymentBlock === 0n) throw new RegistryDeploymentBlockRequired();
 
     let logs;
     try {

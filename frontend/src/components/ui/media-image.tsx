@@ -41,6 +41,14 @@ export function MediaImage({
   fallback?: React.ReactNode;
 }) {
   const [loaded, setLoaded] = useState(false);
+  // Local seed photos are relative paths (/stall-photos/...); real vendor
+  // uploads are full Supabase Storage URLs. Remote sources skip Next's own
+  // re-optimization — they're already CDN-backed, and routing them through
+  // Next's image proxy hits its SSRF-protection IP check, which false-
+  // positives on networks using NAT64 (DNS resolves the CDN host to a
+  // synthesized 64:ff9b::/96 address that Next treats as private even
+  // though it decodes to a real public IP).
+  const isRemote = src?.startsWith("http");
 
   return (
     <div className={`relative overflow-hidden ${className}`} style={{ aspectRatio }}>
@@ -54,6 +62,7 @@ export function MediaImage({
             sizes={sizes}
             priority={priority}
             quality={80}
+            unoptimized={isRemote}
             onLoad={() => setLoaded(true)}
             className={`object-cover transition-opacity duration-500 ${loaded ? "opacity-100" : "opacity-0"}`}
           />

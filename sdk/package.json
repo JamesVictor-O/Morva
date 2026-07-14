@@ -1,7 +1,25 @@
 {
   "name": "@morva/sdk",
   "version": "0.0.1",
-  "private": true,
+  "private": false,
+  "description": "Headless TypeScript SDK for accepting crypto payments settled in a merchant's chosen token on Arbitrum One, from a buyer's cross-chain balance via Particle Universal Accounts (EIP-7702).",
+  "keywords": [
+    "crypto-payments",
+    "web3",
+    "eip-7702",
+    "universal-account",
+    "particle-network",
+    "arbitrum",
+    "checkout"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JamesVictor-O/Morva.git",
+    "directory": "sdk"
+  },
+  "bugs": "https://github.com/JamesVictor-O/Morva/issues",
+  "homepage": "https://github.com/JamesVictor-O/Morva/tree/main/sdk#readme",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -21,7 +39,8 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "e2e": "tsx scripts/e2e-payment.ts"
+    "e2e": "tsx scripts/e2e-payment.ts",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

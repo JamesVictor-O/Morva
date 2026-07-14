@@ -70,7 +70,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const next = await fetchUnifiedBalance(address);
       setBalance(next);
       setBalanceStatus("ready");
-    } catch {
+    } catch (err) {
+      console.error("[Morva] fetchUnifiedBalance failed:", err);
       setBalanceStatus("error");
     }
   }, []);

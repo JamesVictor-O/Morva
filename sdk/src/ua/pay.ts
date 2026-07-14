@@ -86,10 +86,15 @@ export async function pay(
   const transactionId: string = result.transactionId;
   const explorerUrl = `https://universalx.app/activity/details?id=${transactionId}`;
 
-  await waitForSettlement(ua, transactionId, intent, {
-    timeoutMs: opts.settlementTimeoutMs ?? DEFAULT_SETTLEMENT_TIMEOUT_MS,
-    rpcUrl: opts.rpcUrl,
-  });
+  try {
+    await waitForSettlement(ua, transactionId, intent, {
+      timeoutMs: opts.settlementTimeoutMs ?? DEFAULT_SETTLEMENT_TIMEOUT_MS,
+      rpcUrl: opts.rpcUrl,
+    });
+  } catch (err) {
+    onStatus("failed");
+    throw err;
+  }
   onStatus("settled");
 
   return { transactionId, explorerUrl };

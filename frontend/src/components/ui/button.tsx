@@ -20,7 +20,7 @@ export function Button({
 }) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold text-[16px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`inline-flex items-center justify-center gap-2 rounded-full px-6 py-4 font-semibold text-[16px] transition-[background-color,color,transform] duration-200 ease-out disabled:cursor-not-allowed disabled:opacity-40 motion-safe:hover:-translate-y-[1.5px] motion-safe:hover:scale-[1.015] motion-safe:active:translate-y-0 motion-safe:active:scale-[0.97] motion-safe:active:duration-100 ${
         VARIANT_CLASSES[variant]
       } ${fullWidth ? "w-full" : ""} ${className}`}
       {...props}

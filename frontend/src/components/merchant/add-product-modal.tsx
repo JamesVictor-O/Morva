@@ -1,30 +1,44 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ImagePlus, X } from "lucide-react";
 import { Modal } from "../ui/modal";
 import { Button } from "../ui/button";
-import type { MerchantProduct } from "@/lib/types";
+import { createProduct } from "@/lib/actions/products";
 
 export function AddProductModal({
   open,
   onClose,
-  onAdd,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
-  onAdd: (product: MerchantProduct) => void;
+  /** Called after the product is actually persisted — the caller re-fetches
+   *  (router.refresh()) rather than optimistically patching local state,
+   *  since the derived stock/status now lives server-side. */
+  onCreated: () => void;
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
   const [details, setDetails] = useState("");
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function reset() {
     setName("");
     setPrice("");
     setStock("");
     setDetails("");
+    setPhoto(null);
+    setPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setError(null);
   }
 
   function handleClose() {
@@ -32,20 +46,38 @@ export function AddProductModal({
     setTimeout(reset, 250);
   }
 
-  function submit(status: "draft" | "listed") {
-    if (!name.trim()) return;
-    const stockNum = Math.max(0, parseInt(stock, 10) || 0);
-    const priceNum = Math.max(0, parseFloat(price) || 0);
-
-    onAdd({
-      id: `custom-${Date.now()}`,
-      name: name.trim(),
-      meta: details.trim() || "—",
-      priceUsd: priceNum,
-      stock: stockNum,
-      status: status === "draft" ? "draft" : stockNum > 0 ? "in-stock" : "out-of-stock",
+  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhoto(file);
+    setPhotoPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
     });
-    handleClose();
+  }
+
+  async function submit(status: "draft" | "listed") {
+    if (!name.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.set("name", name.trim());
+      formData.set("meta", details.trim() || "—");
+      formData.set("priceUsd", String(Math.max(0, parseFloat(price) || 0)));
+      formData.set("stock", String(Math.max(0, parseInt(stock, 10) || 0)));
+      formData.set("isDraft", String(status === "draft"));
+      if (photo) formData.set("photo", photo);
+
+      await createProduct(formData);
+      onCreated();
+      handleClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't add that product. Try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -62,11 +94,23 @@ export function AddProductModal({
           </button>
         </div>
 
-        <div className="mt-5 flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border-strong bg-surface py-9 text-center">
-          <ImagePlus size={24} strokeWidth={1.6} className="text-ink-quiet" />
-          <p className="text-[15px] font-semibold text-ink">Drop a photo, or browse</p>
-          <p className="text-[13px] text-ink-faint">A clean shot on white works best</p>
-        </div>
+        <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="mt-5 flex w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl border border-dashed border-border-strong bg-surface py-9 text-center transition-colors hover:border-primary"
+        >
+          {photoPreviewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoPreviewUrl} alt="Product photo preview" className="h-24 w-24 rounded-xl object-cover" />
+          ) : (
+            <>
+              <ImagePlus size={24} strokeWidth={1.6} className="text-ink-quiet" />
+              <p className="text-[15px] font-semibold text-ink">Drop a photo, or browse</p>
+              <p className="text-[13px] text-ink-faint">A clean shot on white works best</p>
+            </>
+          )}
+        </button>
 
         <div className="mt-5">
           <FieldLabel>Name</FieldLabel>
@@ -116,12 +160,14 @@ export function AddProductModal({
           />
         </div>
 
+        {error && <p className="mt-4 text-[13px] text-error-fg">{error}</p>}
+
         <div className="mt-6 flex gap-3">
-          <Button variant="ghost" onClick={() => submit("draft")} className="px-6 py-3.5 text-[15px]">
+          <Button variant="ghost" onClick={() => submit("draft")} disabled={submitting} className="px-6 py-3.5 text-[15px]">
             Save as draft
           </Button>
-          <Button fullWidth onClick={() => submit("listed")} className="py-3.5 text-[15px]">
-            Add to stall
+          <Button fullWidth onClick={() => submit("listed")} disabled={submitting} className="py-3.5 text-[15px]">
+            {submitting ? "Adding…" : "Add to stall"}
           </Button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { getProductById } from "./mock-data";
+import type { Product } from "./types";
 
 export interface CartLine {
   productId: string;
@@ -55,6 +55,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // so the persisted cart is loaded in an effect, same as AuthProvider's
   // Magic session restore.
   const [state, setState] = useState<CartState>(EMPTY_STATE);
+  // Cart storage is deliberately just {productId, quantity} — display info
+  // (name/price/photo) is resolved from the real catalog via
+  // /api/products/lookup and cached here, rather than duplicated into
+  // localStorage where it could go stale against real price changes.
+  const [productCache, setProductCache] = useState<Record<string, Product>>({});
 
   useEffect(() => {
     // Deferred to a microtask so setState never runs synchronously within
@@ -78,6 +83,31 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state]);
 
+  useEffect(() => {
+    const missingIds = state.lines.map((line) => line.productId).filter((id) => !(id in productCache));
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+    fetch(`/api/products/lookup?ids=${missingIds.join(",")}`)
+      .then((res) => res.json())
+      .then((data: { products: Product[] }) => {
+        if (cancelled) return;
+        setProductCache((prev) => {
+          const next = { ...prev };
+          for (const product of data.products) next[product.id] = product;
+          return next;
+        });
+      })
+      .catch(() => {
+        // Best-effort — resolvedLines() just won't include this line until
+        // a later render (e.g. the next cart change) retries it.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [state.lines, productCache]);
+
   const setQuantity = useCallback((stallSlug: string, productId: string, quantity: number) => {
     setState((prev) => {
       const sameStall = prev.stallSlug === stallSlug;
@@ -99,7 +129,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     () =>
       state.lines
         .map((line): ResolvedCartLine | null => {
-          const product = getProductById(line.productId);
+          const product = productCache[line.productId];
           if (!product) return null;
           return {
             ...line,
@@ -111,7 +141,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           };
         })
         .filter((line): line is ResolvedCartLine => line !== null),
-    [state.lines]
+    [state.lines, productCache]
   );
 
   const itemCount = state.lines.reduce((sum, line) => sum + line.quantity, 0);

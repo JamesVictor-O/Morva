@@ -37,6 +37,11 @@ export function particleConfigured(): boolean {
  *  nothing more than this address; no signer is required until checkout
  *  actually needs to authorize a transaction. */
 async function createUniversalAccount(ownerAddress: Address): Promise<UniversalAccountType> {
+  // Resolves via next.config.ts's turbopack.resolveAlias, which forces this
+  // specifier to the package's ESM build directly — see that config entry
+  // for why (Turbopack's default browser resolution of the bare specifier
+  // picks the package's obfuscated CJS build instead, which loses its
+  // named exports in Turbopack's browser interop layer).
   const { UniversalAccount, UNIVERSAL_ACCOUNT_VERSION } = await import("@particle-network/universal-account-sdk");
   return new UniversalAccount({
     projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID!,
