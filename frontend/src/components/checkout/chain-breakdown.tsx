@@ -1,3 +1,4 @@
+import { formatUsd } from "@/lib/format";
 import type { ChainHolding } from "@/lib/types";
 
 export function ChainBreakdown({ chains }: { chains: ChainHolding[] }) {
@@ -12,7 +13,7 @@ export function ChainBreakdown({ chains }: { chains: ChainHolding[] }) {
             {chain.initial}
           </span>
           <span className="flex-1 text-[14px] text-ink">{chain.name}</span>
-          <span className="text-[14px] font-semibold text-ink">${chain.amountUsd.toFixed(2)}</span>
+          <span className="text-[14px] font-semibold text-ink">${formatUsd(chain.amountUsd)}</span>
         </div>
       ))}
     </div>

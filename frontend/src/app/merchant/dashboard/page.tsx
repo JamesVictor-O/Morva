@@ -9,6 +9,7 @@ import { getMerchantSession } from "@/lib/auth/session";
 import { getMyStall } from "@/lib/data/stalls";
 import { getMyProducts } from "@/lib/data/products";
 import { getMyPayments, getWeeklyStats } from "@/lib/data/orders";
+import { formatUsd } from "@/lib/format";
 import type { Accent } from "@/lib/types";
 
 export default async function MerchantDashboardPage() {
@@ -87,8 +88,8 @@ export default async function MerchantDashboardPage() {
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[17px] font-semibold text-ink">Recent payments</p>
             <p className="text-[14px] text-ink-faint">
-              This week · ${weeklyStats.weekUsd.toFixed(2)} settled
-              {settledToday > 0 ? ` · $${settledToday.toFixed(2)} shown below` : ""}
+              This week · ${formatUsd(weeklyStats.weekUsd)} settled
+              {settledToday > 0 ? ` · $${formatUsd(settledToday)} shown below` : ""}
             </p>
           </div>
           <div className="mt-4">
@@ -108,7 +109,7 @@ export default async function MerchantDashboardPage() {
                   <p className="text-[13px] text-ink-faint">{payment.time}</p>
                 </div>
                 <p className="flex-none text-[16px] font-semibold text-ink">
-                  ${payment.amountUsd.toFixed(2)}
+                  ${formatUsd(payment.amountUsd)}
                 </p>
                 <span className="flex-none rounded-full bg-success-bg px-[13px] py-1.5 text-[12px] font-medium text-success-fg">
                   Settled

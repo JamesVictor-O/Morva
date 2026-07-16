@@ -38,7 +38,7 @@ export const products = pgTable("products", {
     .references(() => stalls.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   meta: text("meta").notNull(),
-  priceUsd: numeric("price_usd", { precision: 12, scale: 2 }).notNull(),
+  priceUsd: numeric("price_usd", { precision: 18, scale: 6 }).notNull(),
   photoUrl: text("photo_url"),
   stock: integer("stock").notNull().default(0),
   isDraft: boolean("is_draft").notNull().default(false),
@@ -57,7 +57,7 @@ export const orders = pgTable("orders", {
   status: text("status", { enum: ["pending", "settled", "failed"] })
     .notNull()
     .default("pending"),
-  totalUsd: numeric("total_usd", { precision: 12, scale: 2 }).notNull(),
+  totalUsd: numeric("total_usd", { precision: 18, scale: 6 }).notNull(),
   settlementTxId: text("settlement_tx_id"),
   explorerUrl: text("explorer_url"),
   failureReason: text("failure_reason"),
@@ -74,9 +74,9 @@ export const orderLines = pgTable("order_lines", {
     .references(() => orders.id, { onDelete: "cascade" }),
   productId: uuid("product_id").references(() => products.id, { onDelete: "set null" }),
   productNameSnapshot: text("product_name_snapshot").notNull(),
-  unitPriceUsdSnapshot: numeric("unit_price_usd_snapshot", { precision: 12, scale: 2 }).notNull(),
+  unitPriceUsdSnapshot: numeric("unit_price_usd_snapshot", { precision: 18, scale: 6 }).notNull(),
   quantity: integer("quantity").notNull(),
-  lineTotalUsd: numeric("line_total_usd", { precision: 12, scale: 2 }).notNull(),
+  lineTotalUsd: numeric("line_total_usd", { precision: 18, scale: 6 }).notNull(),
 });
 
 /** Short-lived SIWE handshake state — one row per issued nonce, deleted

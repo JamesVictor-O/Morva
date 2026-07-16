@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
-import { AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronDown, Copy, Lock } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CheckCircle2, ChevronDown, Copy, ExternalLink, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AvatarTile } from "@/components/ui/avatar-tile";
 import { MediaImage } from "@/components/ui/media-image";
@@ -14,6 +14,7 @@ import { useCart, type ResolvedCartLine } from "@/lib/cart-context";
 import { getMagic } from "@/lib/magic";
 import { MagicSigner } from "@/lib/magic-signer";
 import { createPendingOrder, markOrderFailed, markOrderSettled } from "@/lib/actions/orders";
+import { formatUsd } from "@/lib/format";
 import type { Stall } from "@/lib/types";
 import { createMorva, type PaymentStatus as SdkPaymentStatus } from "@morva/sdk";
 
@@ -44,6 +45,8 @@ interface CompletedOrder {
   lines: ResolvedCartLine[];
   total: number;
   email: string;
+  transactionId: string;
+  explorerUrl: string;
 }
 
 export function CheckoutPageClient({ stall }: { stall: Stall }) {
@@ -118,7 +121,12 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
       const session = await morva.connect(signer);
 
       const intent = morva.createDirectIntent({
-        amount: total.toFixed(2),
+        // USDC has 6 on-chain decimals — .toFixed(2) here would silently
+        // round any sub-cent total to "0.00" and pay literally nothing
+        // (confirmed live: a $0.001 item settled a real, verifiable
+        // transaction that moved zero value). 6 matches what's actually
+        // being sent to a 6-decimal token.
+        amount: total.toFixed(6),
         orderId: pending.orderNumber,
         settlementToken: tokenAddress,
         settlementRecipient: stall.payoutAddress as `0x${string}`,
@@ -130,7 +138,14 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
 
       await markOrderSettled(pending.orderId, result);
 
-      setCompletedOrder({ orderNumber: pending.orderNumber, lines, total, email });
+      setCompletedOrder({
+        orderNumber: pending.orderNumber,
+        lines,
+        total,
+        email,
+        transactionId: result.transactionId,
+        explorerUrl: result.explorerUrl,
+      });
       setStep("success");
       cart.clear();
     } catch (err) {
@@ -166,7 +181,7 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
         <div>
           <p className="text-[15px] text-ink-soft">You&apos;re paying</p>
           <p className="mt-1 text-[52px] font-semibold leading-none tracking-tight text-ink sm:text-[60px]">
-            ${total.toFixed(2)}
+            ${formatUsd(total)}
           </p>
 
           <div className="mt-8 flex flex-col divide-y divide-divider rounded-[24px] border border-border-soft bg-surface-solid">
@@ -191,7 +206,7 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
                   </p>
                 </div>
                 <p className="flex-none text-[16px] font-semibold text-ink">
-                  ${line.lineTotalUsd.toFixed(2)}
+                  ${formatUsd(line.lineTotalUsd)}
                 </p>
               </div>
             ))}
@@ -200,7 +215,7 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
           <div className="mt-6 flex flex-col gap-2.5 text-[15px]">
             <div className="flex items-center justify-between text-ink-soft">
               <span>Subtotal</span>
-              <span>${total.toFixed(2)}</span>
+              <span>${formatUsd(total)}</span>
             </div>
             <div className="flex items-center justify-between text-ink-soft">
               <span>Shipping</span>
@@ -212,7 +227,7 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
             </div>
             <div className="mt-1.5 flex items-center justify-between border-t border-border-soft pt-2.5 text-[18px] font-semibold text-ink">
               <span>Total</span>
-              <span>${total.toFixed(2)}</span>
+              <span>${formatUsd(total)}</span>
             </div>
           </div>
         </div>
@@ -227,7 +242,7 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
               <div className="min-w-0">
                 <p className="text-[13px] text-ink-faint">Your balance</p>
                 <p className={`mt-0.5 text-[26px] font-semibold tracking-tight text-ink ${balanceLoading ? "animate-pulse" : ""}`}>
-                  {balanceError ? "Unavailable" : balanceLoading ? "…" : `$${(balance?.totalUsd ?? 0).toFixed(2)}`}
+                  {balanceError ? "Unavailable" : balanceLoading ? "…" : `$${formatUsd((balance?.totalUsd ?? 0))}`}
                 </p>
               </div>
               {balanceError ? (
@@ -274,7 +289,7 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
             <div className="mt-4 flex items-center justify-between text-[14px] text-ink-soft">
               <span>Balance after this order</span>
               <span className={`font-semibold ${covers ? "text-ink" : "text-error-fg"}`}>
-                ${(covers ? remaining : balance?.totalUsd ?? 0).toFixed(2)}
+                ${formatUsd(covers ? remaining : (balance?.totalUsd ?? 0))}
               </span>
             </div>
           )}
@@ -286,7 +301,7 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
                 Not enough in your balance
               </p>
               <p className="mt-1 text-[12.5px] leading-[1.4] text-error-fg-soft">
-                You&apos;re ${shortfall.toFixed(2)} short.
+                You&apos;re ${formatUsd(shortfall)} short.
               </p>
             </div>
           )}
@@ -312,7 +327,7 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
               ? (payStatusLabel ?? "Moving your funds…")
               : balanceLoading
                 ? "Checking your balance…"
-                : `Pay $${total.toFixed(2)}`}
+                : `Pay $${formatUsd(total)}`}
           </Button>
 
           {payError && (
@@ -398,6 +413,16 @@ function SuccessView({ stall, order }: { stall: Stall; order: CompletedOrder }) 
           </p>
         )}
 
+        <a
+          href={order.explorerUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-soft transition-colors hover:text-ink"
+        >
+          View transaction
+          <ExternalLink size={13} strokeWidth={1.8} />
+        </a>
+
         <div className="mt-8 overflow-hidden rounded-[24px] border border-border-soft bg-surface-solid text-left">
           <p className="border-b border-border-soft px-5 py-4 text-[15px] font-semibold text-ink">
             Order summary
@@ -422,14 +447,14 @@ function SuccessView({ stall, order }: { stall: Stall; order: CompletedOrder }) 
                   <p className="text-[12px] text-ink-faint">Qty {line.quantity}</p>
                 </div>
                 <p className="flex-none text-[14px] font-semibold text-ink">
-                  ${line.lineTotalUsd.toFixed(2)}
+                  ${formatUsd(line.lineTotalUsd)}
                 </p>
               </div>
             ))}
           </div>
           <div className="flex items-center justify-between border-t border-border-soft px-5 py-4 text-[16px] font-semibold text-ink">
             <span>Total</span>
-            <span>${order.total.toFixed(2)}</span>
+            <span>${formatUsd(order.total)}</span>
           </div>
         </div>
 

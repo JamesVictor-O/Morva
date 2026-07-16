@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { AvatarTile } from "@/components/ui/avatar-tile";
 import { StatusPill } from "@/components/ui/status-pill";
+import { formatUsd } from "@/lib/format";
 import type { MerchantPayment } from "@/lib/data/orders";
 import type { Accent, PaymentStatus } from "@/lib/types";
 
@@ -58,13 +59,13 @@ export function PaymentsPageClient({
 
       <main className="px-5 py-8 sm:px-8 lg:px-[34px] lg:py-10">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatCard label="Settled" value={`$${settledTodayUsd.toFixed(2)}`}>
+          <StatCard label="Settled" value={`$${formatUsd(settledTodayUsd)}`}>
             Across {settled.length} sales
           </StatCard>
-          <StatCard label="This week" value={`$${weeklyStats.weekUsd.toFixed(2)}`}>
+          <StatCard label="This week" value={`$${formatUsd(weeklyStats.weekUsd)}`}>
             {weeklyStats.salesThisWeek} sales
           </StatCard>
-          <StatCard label="Settling now" value={`$${settlingNowUsd.toFixed(2)}`}>
+          <StatCard label="Settling now" value={`$${formatUsd(settlingNowUsd)}`}>
             {clearing.length > 0 ? (
               <span className="text-accent-yellow-fg">
                 {clearing.length} payment{clearing.length === 1 ? "" : "s"} clearing
@@ -165,7 +166,7 @@ function PaymentRow({ payment, withDivider }: { payment: MerchantPayment; withDi
         {payment.settledToAddress ? truncateAddress(payment.settledToAddress) : "— pending —"}
       </p>
       <p className="w-[90px] flex-none text-right text-[16px] font-semibold text-ink">
-        ${payment.amountUsd.toFixed(2)}
+        ${formatUsd(payment.amountUsd)}
       </p>
       <div className="w-[90px] flex-none text-right">
         <StatusPill tone={payment.status === "settled" ? "success" : "warning"}>

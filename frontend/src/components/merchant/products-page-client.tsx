@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { AddProductModal } from "@/components/merchant/add-product-modal";
 import { updateProductPrice, restockProduct } from "@/lib/actions/products";
+import { formatUsd } from "@/lib/format";
 import type { Accent, MerchantProduct, MerchantProductStatus } from "@/lib/types";
 
 const STATUS_LABEL: Record<MerchantProductStatus, string> = {
@@ -43,7 +44,10 @@ export function ProductsPageClient({
 
   function startEdit(product: MerchantProduct) {
     setEditingId(product.id);
-    setDraftPrice(product.priceUsd.toFixed(2));
+    // Full precision, not a display-rounded value — this seeds an editable
+    // input that round-trips straight back into updateProductPrice, so
+    // rounding here would silently clip the stored price on next save.
+    setDraftPrice(String(product.priceUsd));
   }
 
   function cancelEdit() {
@@ -203,7 +207,7 @@ function ProductRow({
             />
           </div>
         ) : (
-          <p className="text-[16px] font-semibold text-ink">${product.priceUsd.toFixed(2)}</p>
+          <p className="text-[16px] font-semibold text-ink">${formatUsd(product.priceUsd)}</p>
         )}
       </div>
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight, ShoppingBag } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useCart } from "@/lib/cart-context";
+import { formatUsd } from "@/lib/format";
 
 /** Floating summary bar that appears once the current stall's cart has
  *  anything in it, and is the only way into the checkout page. */
@@ -30,7 +31,7 @@ export function CartBar({ stallSlug }: { stallSlug: string }) {
               {itemCount} {itemCount === 1 ? "item" : "items"}
             </span>
             <span className="flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-ink">
-              Checkout · ${totalUsd.toFixed(2)}
+              Checkout · ${formatUsd(totalUsd)}
               <ArrowRight size={15} strokeWidth={2} />
             </span>
           </Link>

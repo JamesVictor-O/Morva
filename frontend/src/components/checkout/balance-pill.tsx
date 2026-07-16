@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronDown, Copy, RefreshCw } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { formatUsd } from "@/lib/format";
 import { ChainBreakdown } from "./chain-breakdown";
 
 function truncateAddress(address: string): string {
@@ -29,7 +30,7 @@ export function BalancePill() {
   }
 
   const loading = balanceStatus === "loading" || balanceStatus === "idle";
-  const totalLabel = loading ? "…" : balance ? `$${balance.totalUsd.toFixed(2)}` : "—";
+  const totalLabel = loading ? "…" : balance ? `$${formatUsd(balance.totalUsd)}` : "—";
 
   return (
     <div className="relative">

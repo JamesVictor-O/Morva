@@ -36,9 +36,9 @@ export async function createPendingOrder(params: {
     return {
       productId: product.id,
       productNameSnapshot: product.name,
-      unitPriceUsdSnapshot: unitPrice.toFixed(2),
+      unitPriceUsdSnapshot: unitPrice.toFixed(6),
       quantity: line.quantity,
-      lineTotalUsd: lineTotal.toFixed(2),
+      lineTotalUsd: lineTotal.toFixed(6),
     };
   });
 
@@ -52,7 +52,7 @@ export async function createPendingOrder(params: {
       buyerAddress: params.buyerAddress,
       buyerEmail: params.buyerEmail,
       status: "pending",
-      totalUsd: totalUsd.toFixed(2),
+      totalUsd: totalUsd.toFixed(6),
     })
     .returning();
 

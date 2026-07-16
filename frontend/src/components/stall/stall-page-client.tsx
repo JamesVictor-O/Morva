@@ -13,6 +13,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { MediaImage } from "@/components/ui/media-image";
 import { accentClasses } from "@/components/ui/accent";
 import { useCart } from "@/lib/cart-context";
+import { formatUsd } from "@/lib/format";
 import type { Product, Stall } from "@/lib/types";
 
 export function StallPageClient({ stall, products }: { stall: Stall; products: Product[] }) {
@@ -83,7 +84,7 @@ export function StallPageClient({ stall, products }: { stall: Stall; products: P
                   <p className="mt-1 text-[14px] text-ink-faint">{product.meta}</p>
                 </div>
                 <div className="flex items-center justify-between">
-                  <p className="text-[22px] font-semibold text-ink">${product.priceUsd}</p>
+                  <p className="text-[22px] font-semibold text-ink">${formatUsd(product.priceUsd)}</p>
                   <QuantityStepper
                     quantity={quantityFor(product.id)}
                     onChange={(next) => setQuantity(stall.slug, product.id, next)}

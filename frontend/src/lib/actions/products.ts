@@ -30,7 +30,7 @@ export async function createProduct(formData: FormData): Promise<void> {
     stallId: stall.id,
     name,
     meta,
-    priceUsd: priceUsd.toFixed(2),
+    priceUsd: priceUsd.toFixed(6),
     stock: Number.isFinite(stockInput) ? Math.max(0, Math.trunc(stockInput)) : 0,
     isDraft,
     photoUrl,
@@ -55,7 +55,7 @@ export async function updateProductPrice(productId: string, priceUsd: number): P
 
   await db
     .update(products)
-    .set({ priceUsd: priceUsd.toFixed(2), updatedAt: new Date() })
+    .set({ priceUsd: priceUsd.toFixed(6), updatedAt: new Date() })
     .where(eq(products.id, productId));
 }
 
