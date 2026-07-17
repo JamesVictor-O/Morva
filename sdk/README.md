@@ -129,7 +129,8 @@ catches anything this SDK throws.
 | `MerchantNotFound` | `getMerchant`/`createPaymentIntent` against an unregistered address. |
 | `MerchantInactive` | Merchant exists but called `setActive(false)`. |
 | `RegistryNotConfigured` | Registry call made without `registryAddress` in config. |
-| `InsufficientUnifiedBalance` | Buyer's unified balance can't cover the intent amount. |
+| `RegistryDeploymentBlockRequired` | `getAllMerchants()` called without `registryDeploymentBlock` set. |
+| `InsufficientUnifiedBalance` | Buyer's unified balance can't cover the intent amount — only checked pre-flight when `settlementToken` is a known USD stablecoin (USDC/USDT/DAI on Arbitrum); other settlement tokens surface an underfunded payment as `MorvaSdkError` from the transfer attempt itself. |
 | `UserRejectedSignature` | The signer rejected a signature or authorization request. |
 | `SettlementTimeout` | No settlement signal within `settlementTimeoutMs`. |
 | `MorvaSdkError` | Base class; also used directly to wrap any unmapped underlying failure with `cause`. |
