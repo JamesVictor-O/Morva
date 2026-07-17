@@ -39,7 +39,7 @@ export function SignInGate({
         Sign in or sign up
       </Button>
       <Link
-        href="/"
+        href="/plaza"
         className="mt-5 flex items-center gap-1.5 text-[14px] text-ink-faint transition-colors hover:text-ink"
       >
         <ArrowLeft size={15} strokeWidth={1.8} />

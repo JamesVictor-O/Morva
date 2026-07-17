@@ -11,9 +11,9 @@ const jetBrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Morva — One balance. Any chain.",
+  title: "@morva/sdk — Checkout that doesn't care which chain your buyer is on",
   description:
-    "A plaza of independent stalls. One balance pays them all. No chains, no gas, no wallets to think about — just shopping.",
+    "A headless TypeScript SDK for accepting crypto payments settled to one token, on one chain, of your choosing — while the buyer pays from a single balance spread across whatever chains they actually hold assets on.",
 };
 
 export default function RootLayout({
