@@ -1,7 +1,7 @@
 import { createPublicClient, erc20Abi, hexToBytes, http, type Hex } from "viem";
 import { arbitrum } from "viem/chains";
 import { CHAIN_ID, UA_TRANSACTION_STATUS, type UniversalAccount } from "@particle-network/universal-account-sdk";
-import { DEFAULT_ARBITRUM_RPC_URL, DEFAULT_SETTLEMENT_TIMEOUT_MS } from "../config";
+import { DEFAULT_ARBITRUM_RPC_URL, DEFAULT_SETTLEMENT_TIMEOUT_MS, isUsdPeggedStablecoin } from "../config";
 import { InsufficientUnifiedBalance, MorvaSdkError, SettlementTimeout, UserRejectedSignature } from "../errors";
 import type { PaymentIntent } from "../intents";
 import { signPendingAuthorizations } from "./authorization";
@@ -47,8 +47,13 @@ export async function pay(
 
   onStatus("building");
 
+  // Only a meaningful comparison when the settlement token is itself a
+  // ~1:1 USD stablecoin — intent.amount is in settlementToken units, not
+  // USD. For any other token (ETH, WETH, an NFT-collection token, ...)
+  // this is skipped; an actually-insufficient balance still surfaces
+  // below, from the real transfer attempt, as a MorvaSdkError.
   const balance = await getUnifiedBalance(ua);
-  if (Number(balance.totalUsd) < Number(intent.amount)) {
+  if (isUsdPeggedStablecoin(intent.settlementToken) && Number(balance.totalUsd) < Number(intent.amount)) {
     onStatus("failed");
     throw new InsufficientUnifiedBalance(intent.amount, balance.totalUsd);
   }

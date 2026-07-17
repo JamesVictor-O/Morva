@@ -1,5 +1,26 @@
 import type { Address } from "viem";
 
+/** Canonical, natively-issued or Circle/Tether-attested 1:1 USD-pegged
+ *  stablecoins on Arbitrum One. Used only to gate the pay() pre-flight
+ *  balance check (see ua/pay.ts) — that check compares a USD balance
+ *  against a raw settlementToken amount, which is only valid when one
+ *  unit of the token is worth ~$1. For any other settlementToken (ETH,
+ *  WETH, an NFT-collection token, etc.) the check is skipped and
+ *  insufficient funds are instead surfaced by the transfer attempt
+ *  itself, wrapped in the usual MorvaSdkError. */
+export const ARBITRUM_USD_STABLECOINS: ReadonlySet<string> = new Set(
+  [
+    "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // USDC (native)
+    "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC", // USDC.e (bridged)
+    "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb", // USDT
+    "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da", // DAI
+  ].map((address) => address.toLowerCase())
+);
+
+export function isUsdPeggedStablecoin(token: Address): boolean {
+  return ARBITRUM_USD_STABLECOINS.has(token.toLowerCase());
+}
+
 export interface MorvaConfig {
   particle: {
     projectId: string;

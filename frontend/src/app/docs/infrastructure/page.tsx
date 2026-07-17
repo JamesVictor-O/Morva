@@ -84,7 +84,7 @@ export default function InfrastructurePage() {
           [
             <code key="2" className="font-mono text-[13px]">createTransferTransaction()</code>,
             "ua/pay.ts",
-            "Builds the actual cross-chain transfer — destination token + chain (always USDC on Arbitrum One) and receiver — sourcing liquidity from wherever the buyer's balance lives.",
+            "Builds the actual cross-chain transfer — destination token, receiver, and chain (always Arbitrum One, the token is whatever the merchant configured) — sourcing liquidity from wherever the buyer's balance lives.",
           ],
           [
             <code key="3" className="font-mono text-[13px]">sendTransaction()</code>,

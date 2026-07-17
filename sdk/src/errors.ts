@@ -42,6 +42,11 @@ export class RegistryDeploymentBlockRequired extends MorvaSdkError {
   }
 }
 
+/** Thrown by the pay() pre-flight check, which only runs when
+ *  settlementToken is a recognized USD-pegged stablecoin (see
+ *  isUsdPeggedStablecoin in config.ts) — for any other settlement token,
+ *  an insufficient balance instead surfaces as a MorvaSdkError from the
+ *  actual transfer attempt. */
 export class InsufficientUnifiedBalance extends MorvaSdkError {
   constructor(
     public readonly requiredUsd: string,

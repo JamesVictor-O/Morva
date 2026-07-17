@@ -17,6 +17,7 @@ vi.mock("viem", async (importOriginal) => {
 const { pay } = await import("../src/ua/pay");
 
 const TOKEN = "0x3333333333333333333333333333333333333333" as const;
+const USDC = "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as const;
 const RECIPIENT = "0x4444444444444444444444444444444444444444" as const;
 const ROOT_HASH = `0x${"ab".repeat(32)}` as const;
 
@@ -89,16 +90,36 @@ afterEach(() => {
 });
 
 describe("pay", () => {
-  it("throws InsufficientUnifiedBalance without building a transaction when balance is too low", async () => {
+  it("throws InsufficientUnifiedBalance without building a transaction when settling in a USD stablecoin and balance is too low", async () => {
     const ua = mockUa({ getPrimaryAssets: vi.fn().mockResolvedValue({ assets: [], totalAmountInUSD: 5 }) });
     const onStatus = vi.fn();
 
-    await expect(pay(ua, mockSigner(), paymentIntent({ amount: "10.00" }), { onStatus })).rejects.toBeInstanceOf(
-      InsufficientUnifiedBalance
-    );
+    await expect(
+      pay(ua, mockSigner(), paymentIntent({ amount: "10.00", settlementToken: USDC }), { onStatus })
+    ).rejects.toBeInstanceOf(InsufficientUnifiedBalance);
 
     expect(ua.createTransferTransaction).not.toHaveBeenCalled();
     expect(onStatus.mock.calls.map((c) => c[0])).toEqual(["building", "failed"]);
+  });
+
+  it("skips the USD pre-flight check for a non-stablecoin settlement token, even when totalUsd is far below the raw amount", async () => {
+    // amount "10.00" here means 10 units of TOKEN (e.g. an NFT-priced ERC-20),
+    // not $10 — a $5 unified balance says nothing about whether 10 units of
+    // an arbitrary token are affordable, so the naive USD comparison must
+    // not fire. The real transfer attempt is what determines affordability.
+    const ua = mockUa({ getPrimaryAssets: vi.fn().mockResolvedValue({ assets: [], totalAmountInUSD: 5 }) });
+    const onStatus = vi.fn();
+
+    const result = await pay(ua, mockSigner(), paymentIntent({ amount: "10.00", settlementToken: TOKEN }), {
+      onStatus,
+    });
+
+    expect(result.transactionId).toBe("tx-1");
+    expect(ua.createTransferTransaction).toHaveBeenCalledWith({
+      token: { chainId: 42161, address: TOKEN },
+      amount: "10.00",
+      receiver: RECIPIENT,
+    });
   });
 
   it("runs the full lifecycle and resolves with the transaction id and explorer url", async () => {

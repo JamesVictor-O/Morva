@@ -164,14 +164,19 @@ try {
           <Callout tone="warning" title="Amount precision">
             <P>
               <InlineCode>amount</InlineCode> is a plain decimal string sent
-              straight through to a 6-decimal token transfer.{" "}
+              straight through to the settlement token&apos;s own transfer —
+              in the token&apos;s units, not necessarily USD (only true for
+              USDC and other 1:1 stablecoins; settling in ETH, WETH, or any
+              other ERC-20 means <InlineCode>amount</InlineCode> is in that
+              token&apos;s units instead).{" "}
               <InlineCode>.toFixed(2)</InlineCode> silently rounds anything
               under a cent to <InlineCode>&quot;0.00&quot;</InlineCode> —
               indistinguishable from a real bug, since{" "}
               <InlineCode>pay()</InlineCode> will happily execute a genuine
-              $0 transfer. Use enough decimal places that a real price never
-              rounds to zero (6 is a safe default, matching the settlement
-              token&apos;s own precision).
+              zero-value transfer. Use enough decimal places that a real
+              price never rounds to zero — match the settlement
+              token&apos;s own decimals (6 for USDC, typically 18 for ETH
+              and most other ERC-20s).
             </P>
           </Callout>
           <P>
