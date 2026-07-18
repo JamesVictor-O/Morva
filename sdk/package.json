@@ -1,6 +1,6 @@
 {
   "name": "@morva/sdk",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": false,
   "description": "Headless TypeScript SDK for accepting crypto payments settled in a merchant's chosen token on Arbitrum One, from a buyer's cross-chain balance via Particle Universal Accounts (EIP-7702).",
   "keywords": [
