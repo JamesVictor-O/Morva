@@ -84,7 +84,7 @@ export default function InfrastructurePage() {
           [
             <code key="2" className="font-mono text-[13px]">createTransferTransaction()</code>,
             "ua/pay.ts",
-            "Builds the actual cross-chain transfer — destination token, receiver, and chain (always Arbitrum One, the token is whatever the merchant configured) — sourcing liquidity from wherever the buyer's balance lives.",
+            "Builds the actual cross-chain transfer — destination token, chain, and receiver, all merchant-configured via the intent (Arbitrum One is only the default) — sourcing liquidity from wherever the buyer's balance lives.",
           ],
           [
             <code key="3" className="font-mono text-[13px]">sendTransaction()</code>,
@@ -182,28 +182,38 @@ export default function InfrastructurePage() {
         </P>
       </Callout>
 
-      <H2 id="arbitrum">Arbitrum One — the settlement chain</H2>
+      <H2 id="arbitrum">Arbitrum One — the default settlement chain</H2>
       <P>
-        Every payment settles on Arbitrum One. This is a fixed, structural
-        decision — <InlineCode>PaymentIntent.settlementChainId</InlineCode>{" "}
-        is typed as a literal, not a configurable field, and{" "}
-        <InlineCode>ua/pay.ts</InlineCode> hardcodes{" "}
-        <InlineCode>CHAIN_ID.ARBITRUM_MAINNET_ONE</InlineCode> as the
-        transfer destination. A merchant chooses <em>which token</em> they
-        settle in (USDC, or another ERC-20) — not which chain.
+        Every payment settles to a chain the merchant chooses per intent —{" "}
+        <InlineCode>PaymentIntent.settlementChainId</InlineCode> is a real,
+        configurable field, typed as a union of the five EVM chains
+        Particle&apos;s Universal Account SDK supports in EIP-7702 mode
+        (Ethereum, BNB Chain, Base, X Layer, and Arbitrum One — Solana is
+        excluded, since EIP-7702 has no Solana equivalent). Arbitrum One is
+        the <em>default</em> when a caller doesn&apos;t specify one, not the
+        only option: <InlineCode>ua/pay.ts</InlineCode> passes{" "}
+        <InlineCode>intent.settlementChainId</InlineCode> straight through
+        to <InlineCode>createTransferTransaction()</InlineCode>. A merchant
+        chooses both <em>which token</em> and <em>which chain</em> they
+        settle to.
       </P>
       <P>
-        This keeps merchant payouts predictable and cheap: one chain to
+        Morva Plaza, this repo&apos;s reference storefront, settles every
+        payment to USDC on Arbitrum One deliberately — one chain to
         monitor, low gas for the final settlement leg, and no cross-chain
         settlement risk on the merchant&apos;s side regardless of how many
-        chains the buyer&apos;s liquidity was actually sourced from.
+        chains the buyer&apos;s liquidity was actually sourced from. That&apos;s
+        a choice Plaza makes with a real config value, not a limit the SDK
+        imposes on every integration.
       </P>
 
       <H2 id="registry">MorvaRegistry — optional on-chain merchant identity</H2>
       <P>
-        A small, deliberately minimal Solidity contract deployed to Arbitrum
-        One. It never holds, receives, or forwards funds — it only stores
-        where a merchant&apos;s payments should be aimed:
+        A small, deliberately minimal Solidity contract, itself always
+        deployed to Arbitrum One. It never holds, receives, or forwards
+        funds — it only stores where a merchant&apos;s payments should be
+        aimed, including which chain they should land on (independent of
+        which chain the registry contract itself lives on):
       </P>
       <CodeBlock
         className="mt-4"
@@ -211,6 +221,7 @@ export default function InfrastructurePage() {
     address settlementToken;
     address settlementRecipient;
     bool active;
+    uint32 settlementChainId; // e.g. 42161 for Arbitrum One
     string metadataURI; // off-chain JSON: { name, logoUrl, description }
 }`}
       />
@@ -218,10 +229,14 @@ export default function InfrastructurePage() {
         Merchant identity is the registering address — one store per
         address, no delegation, no admin role over anyone else&apos;s
         config. <InlineCode>morva.createPaymentIntent()</InlineCode> reads
-        this on-chain; <InlineCode>morva.createDirectIntent()</InlineCode> skips
-        it entirely. Whether you use it depends on whether you want
-        settlement config to be a self-sovereign, publicly verifiable
-        record, or something your own backend stores and controls — see{" "}
+        this on-chain and validates <InlineCode>settlementChainId</InlineCode>{" "}
+        against the SDK&apos;s supported set before building an intent;{" "}
+        <InlineCode>morva.createDirectIntent()</InlineCode> skips the
+        registry entirely and takes <InlineCode>settlementChainId</InlineCode>{" "}
+        as a direct argument instead. Whether you use it depends on whether
+        you want settlement config to be a self-sovereign, publicly
+        verifiable record, or something your own backend stores and
+        controls — see{" "}
         <Link href="/docs/concepts#payment-intent" className="font-semibold text-ink underline underline-offset-2">
           direct vs registry intents
         </Link>{" "}

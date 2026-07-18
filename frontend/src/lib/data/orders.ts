@@ -15,6 +15,7 @@ export interface MerchantPayment {
   amountUsd: number;
   time: string;
   status: PaymentStatus;
+  explorerUrl?: string;
 }
 
 function buyerInitials(address: string): string {
@@ -59,6 +60,7 @@ export async function getMyPayments(statusFilter?: "settled" | "pending"): Promi
       amountUsd: Number(order.totalUsd),
       time: order.createdAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
       status: order.status === "settled" ? "settled" : "pending",
+      explorerUrl: order.explorerUrl ?? undefined,
     });
   }
   return payments;

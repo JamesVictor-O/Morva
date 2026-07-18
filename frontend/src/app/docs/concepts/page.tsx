@@ -50,12 +50,11 @@ export default function ConceptsPage() {
       <H2 id="payment-intent">PaymentIntent</H2>
       <P>
         A plain description of what&apos;s being paid: amount, settlement
-        token, settlement recipient, and a fixed settlement chain (Arbitrum
-        One — see{" "}
+        token, settlement recipient, and a settlement chain — see{" "}
         <Link href="/docs/infrastructure#arbitrum" className="font-semibold text-ink underline underline-offset-2">
-          why it&apos;s fixed
+          why Arbitrum One is the default, not the only option
         </Link>
-        ). Nothing about an intent is buyer-specific; it describes the sale,
+        . Nothing about an intent is buyer-specific; it describes the sale,
         not the payer.
       </P>
 

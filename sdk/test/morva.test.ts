@@ -68,6 +68,7 @@ describe("Morva", () => {
       settlementRecipient: RECIPIENT,
       metadataURI: "",
       active: false,
+      settlementChainId: 42161,
     });
     const morva = new Morva(baseConfig());
 
@@ -82,6 +83,7 @@ describe("Morva", () => {
       settlementRecipient: RECIPIENT,
       metadataURI: "",
       active: true,
+      settlementChainId: 42161,
     });
     const morva = new Morva(baseConfig());
 
@@ -119,7 +121,7 @@ describe("Morva", () => {
     const morva = new Morva(baseConfig());
 
     const hash = await morva.registerMerchant(
-      { settlementToken: TOKEN, settlementRecipient: RECIPIENT, metadataURI: "", active: true },
+      { settlementToken: TOKEN, settlementRecipient: RECIPIENT, metadataURI: "", active: true, settlementChainId: 42161 },
       walletClient
     );
 

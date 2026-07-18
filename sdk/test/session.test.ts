@@ -51,10 +51,10 @@ describe("BuyerSession", () => {
     expect(balance).toBe(fakeBalance);
   });
 
-  it("pay delegates to ua/pay.pay with the config's rpcUrl and settlementTimeoutMs", async () => {
+  it("pay delegates to ua/pay.pay with the config's settlementRpcUrls and settlementTimeoutMs", async () => {
     const ua = {} as UniversalAccount;
     const signer = mockSigner();
-    const config = mockConfig({ rpcUrl: "https://custom-rpc", settlementTimeoutMs: 5_000 });
+    const config = mockConfig({ settlementRpcUrls: { 42161: "https://custom-rpc" }, settlementTimeoutMs: 5_000 });
     const intent = { orderId: "o1" } as PaymentIntent;
     const onStatus = vi.fn();
     const fakeResult = { transactionId: "tx-1", explorerUrl: "https://example.com" };
@@ -65,9 +65,30 @@ describe("BuyerSession", () => {
 
     expect(pay).toHaveBeenCalledWith(ua, signer, intent, {
       onStatus,
-      rpcUrl: "https://custom-rpc",
+      settlementRpcUrls: { 42161: "https://custom-rpc" },
       settlementTimeoutMs: 5_000,
     });
     expect(result).toBe(fakeResult);
+  });
+
+  it("forwards onDebug, resumeTransactionId, and buildExplorerUrl through to ua/pay.pay", async () => {
+    const ua = {} as UniversalAccount;
+    const signer = mockSigner();
+    const config = mockConfig();
+    const intent = { orderId: "o1" } as PaymentIntent;
+    const onDebug = vi.fn();
+    const buildExplorerUrl = (id: string) => `https://example.com/${id}`;
+    const fakeResult = { transactionId: "tx-1", explorerUrl: "https://example.com/tx-1" };
+    vi.mocked(pay).mockResolvedValue(fakeResult);
+
+    const session = new BuyerSession(ua, signer, config);
+    await session.pay(intent, { onDebug, resumeTransactionId: "tx-earlier", buildExplorerUrl });
+
+    expect(pay).toHaveBeenCalledWith(
+      ua,
+      signer,
+      intent,
+      expect.objectContaining({ onDebug, resumeTransactionId: "tx-earlier", buildExplorerUrl })
+    );
   });
 });

@@ -1,5 +1,6 @@
 import type { Address } from "viem";
-import { ARBITRUM_ONE_CHAIN_ID } from "./config";
+import { DEFAULT_SETTLEMENT_CHAIN_ID, isSupportedSettlementChainId, type SupportedSettlementChainId } from "./config";
+import { UnsupportedSettlementChain } from "./errors";
 import type { MerchantConfig } from "./registry/client";
 
 export interface PaymentIntent {
@@ -9,7 +10,13 @@ export interface PaymentIntent {
   amount: string;
   settlementToken: Address;
   settlementRecipient: Address;
-  settlementChainId: typeof ARBITRUM_ONE_CHAIN_ID;
+  settlementChainId: SupportedSettlementChainId;
+}
+
+function resolveSettlementChainId(chainId: number | undefined): SupportedSettlementChainId {
+  if (chainId === undefined) return DEFAULT_SETTLEMENT_CHAIN_ID;
+  if (!isSupportedSettlementChainId(chainId)) throw new UnsupportedSettlementChain(chainId);
+  return chainId;
 }
 
 export function buildPaymentIntentFromMerchant(
@@ -24,7 +31,7 @@ export function buildPaymentIntentFromMerchant(
     amount,
     settlementToken: config.settlementToken,
     settlementRecipient: config.settlementRecipient,
-    settlementChainId: ARBITRUM_ONE_CHAIN_ID,
+    settlementChainId: resolveSettlementChainId(config.settlementChainId),
   };
 }
 
@@ -33,12 +40,16 @@ export function buildDirectIntent(args: {
   orderId: string;
   settlementToken: Address;
   settlementRecipient: Address;
+  /** Which chain settlementToken/settlementRecipient live on. Defaults to
+   *  DEFAULT_SETTLEMENT_CHAIN_ID (Arbitrum One) — pass one of
+   *  SUPPORTED_SETTLEMENT_CHAIN_IDS to settle elsewhere. */
+  settlementChainId?: SupportedSettlementChainId;
 }): PaymentIntent {
   return {
     orderId: args.orderId,
     amount: args.amount,
     settlementToken: args.settlementToken,
     settlementRecipient: args.settlementRecipient,
-    settlementChainId: ARBITRUM_ONE_CHAIN_ID,
+    settlementChainId: resolveSettlementChainId(args.settlementChainId),
   };
 }

@@ -65,3 +65,11 @@ export async function restockProduct(productId: string, delta: number): Promise<
 
   await db.update(products).set({ stock: nextStock, updatedAt: new Date() }).where(eq(products.id, productId));
 }
+
+/** Order lines reference productId with onDelete: "set null" (see
+ *  db/schema.ts), so this never touches past order history — a deleted
+ *  product's name/price live on in orderLines' own snapshot columns. */
+export async function deleteProduct(productId: string): Promise<void> {
+  await requireOwnedProduct(productId);
+  await db.delete(products).where(eq(products.id, productId));
+}

@@ -99,8 +99,10 @@ console.log(result.transactionId, result.explorerUrl);`}
       />
       <P>
         <InlineCode>session.pay()</InlineCode> resolves once funds are
-        confirmed at <InlineCode>settlementRecipient</InlineCode> on
-        Arbitrum One, or throws one of the typed errors documented on the{" "}
+        confirmed at <InlineCode>settlementRecipient</InlineCode> on the
+        intent&apos;s settlement chain (Arbitrum One here, since{" "}
+        <InlineCode>settlementChainId</InlineCode> wasn&apos;t set above), or
+        throws one of the typed errors documented on the{" "}
         <Link href="/docs/errors" className="font-semibold text-ink underline underline-offset-2">
           errors page
         </Link>

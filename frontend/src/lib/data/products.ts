@@ -62,6 +62,7 @@ export async function getMyProducts(): Promise<MerchantProduct[]> {
     name: row.name,
     meta: row.meta,
     priceUsd: Number(row.priceUsd),
+    photoUrl: row.photoUrl ?? undefined,
     stock: row.stock,
     status: deriveStatus(row.stock, row.isDraft),
   }));

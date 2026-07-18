@@ -14,8 +14,14 @@ import { DEFAULT_REGISTRY_DEPLOYMENT_BLOCK } from "../config";
 export interface MerchantConfig {
   settlementToken: Address;
   settlementRecipient: Address;
-  metadataURI: string;
   active: boolean;
+  /** Which chain settlementToken/settlementRecipient live on — see
+   *  SUPPORTED_SETTLEMENT_CHAIN_IDS in config.ts. Read as a plain
+   *  `number` here (the contract stores uint32); createPaymentIntent()
+   *  validates it against the SDK's supported set before building an
+   *  intent. */
+  settlementChainId: number;
+  metadataURI: string;
   metadata?: MerchantMetadata;
 }
 
@@ -36,7 +42,13 @@ export class RegistryClient {
   async getMerchant(merchant: Address): Promise<MerchantConfig> {
     const registryAddress = this.requireAddress();
 
-    let raw: { settlementToken: Address; settlementRecipient: Address; metadataURI: string; active: boolean };
+    let raw: {
+      settlementToken: Address;
+      settlementRecipient: Address;
+      active: boolean;
+      settlementChainId: number;
+      metadataURI: string;
+    };
     try {
       raw = (await this.publicClient.readContract({
         address: registryAddress,

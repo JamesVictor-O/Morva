@@ -59,9 +59,11 @@ export default function DocsIntroductionPage() {
           touches a private key.
         </LI>
         <LI>
-          <strong className="text-ink">Arbitrum One</strong> is the fixed
-          settlement chain. Whatever the buyer holds and wherever they hold
-          it, the merchant&apos;s configured token lands there.
+          <strong className="text-ink">Arbitrum One</strong> is the default
+          settlement chain — merchants can choose any of the five chains
+          Particle&apos;s Universal Account SDK supports in EIP-7702 mode.
+          Whatever the buyer holds and wherever they hold it, the
+          merchant&apos;s configured token lands on the chain they chose.
         </LI>
       </UL>
       <P>

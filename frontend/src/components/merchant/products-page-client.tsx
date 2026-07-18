@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { AvatarTile } from "@/components/ui/avatar-tile";
 import { Button } from "@/components/ui/button";
+import { MediaImage } from "@/components/ui/media-image";
 import { StatusPill } from "@/components/ui/status-pill";
 import { AddProductModal } from "@/components/merchant/add-product-modal";
-import { updateProductPrice, restockProduct } from "@/lib/actions/products";
+import { updateProductPrice, restockProduct, deleteProduct } from "@/lib/actions/products";
 import { formatUsd } from "@/lib/format";
 import type { Accent, MerchantProduct, MerchantProductStatus } from "@/lib/types";
 
@@ -91,6 +92,19 @@ export function ProductsPageClient({
     }
   }
 
+  async function handleDelete(product: MerchantProduct) {
+    if (!window.confirm(`Delete "${product.name}"? This can't be undone.`)) return;
+
+    if (editingId === product.id) setEditingId(null);
+    setPendingId(product.id);
+    try {
+      await deleteProduct(product.id);
+      router.refresh();
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   return (
     <AppShell variant="merchant">
       <Topbar
@@ -126,6 +140,7 @@ export function ProductsPageClient({
               <ProductRow
                 key={product.id}
                 product={product}
+                stallAccent={stallAccent}
                 withDivider={i > 0}
                 editing={editingId === product.id}
                 pending={pendingId === product.id}
@@ -137,6 +152,7 @@ export function ProductsPageClient({
                 restockAmount={restockAmountFor(product.id)}
                 onAdjustRestock={(delta) => adjustRestock(product.id, delta)}
                 onCommitRestock={() => commitRestock(product.id)}
+                onDelete={() => handleDelete(product)}
               />
             ))}
           </div>
@@ -150,6 +166,7 @@ export function ProductsPageClient({
 
 function ProductRow({
   product,
+  stallAccent,
   withDivider,
   editing,
   pending,
@@ -161,8 +178,10 @@ function ProductRow({
   restockAmount,
   onAdjustRestock,
   onCommitRestock,
+  onDelete,
 }: {
   product: MerchantProduct;
+  stallAccent: Accent;
   withDivider: boolean;
   editing: boolean;
   pending: boolean;
@@ -174,6 +193,7 @@ function ProductRow({
   restockAmount: number;
   onAdjustRestock: (delta: number) => void;
   onCommitRestock: () => void;
+  onDelete: () => void;
 }) {
   const needsRestock = product.status === "low-stock" || product.status === "out-of-stock";
   const tone =
@@ -183,9 +203,18 @@ function ProductRow({
 
   return (
     <div className={`flex flex-wrap items-center gap-4 py-4 ${withDivider ? "border-t border-divider" : ""} ${pending ? "opacity-60" : ""}`}>
-      <div className="flex h-[52px] w-[52px] flex-none items-center justify-center rounded-2xl bg-fill font-mono text-[11px] text-ink-quiet">
-        shot
-      </div>
+      <MediaImage
+        src={product.photoUrl}
+        alt={product.name}
+        sizes="52px"
+        aspectRatio="1 / 1"
+        className="w-[52px] flex-none rounded-2xl bg-fill"
+        fallback={
+          <div className="flex h-full w-full items-center justify-center">
+            <AvatarTile label={product.name.charAt(0).toUpperCase()} accent={stallAccent} size="xl" className="rounded-2xl" />
+          </div>
+        }
+      />
 
       <div className="min-w-[160px] flex-1">
         <p className={`truncate text-[16px] font-semibold ${product.status === "draft" ? "text-ink-faint" : "text-ink"}`}>
@@ -250,14 +279,25 @@ function ProductRow({
               Save
             </button>
           </>
-        ) : needsRestock ? (
-          <button onClick={onCommitRestock} disabled={pending} className="text-[14px] font-semibold text-ink">
-            Restock
-          </button>
         ) : (
-          <button onClick={onStartEdit} className="text-[14px] text-ink-faint">
-            Edit
-          </button>
+          <>
+            {needsRestock && (
+              <button onClick={onCommitRestock} disabled={pending} className="text-[14px] font-semibold text-ink">
+                Restock
+              </button>
+            )}
+            <button onClick={onStartEdit} disabled={pending} className="text-[14px] text-ink-faint">
+              Edit
+            </button>
+            <button
+              onClick={onDelete}
+              disabled={pending}
+              aria-label={`Delete ${product.name}`}
+              className="flex h-8 w-8 items-center justify-center rounded-full text-ink-faint transition-colors hover:bg-error-bg hover:text-error-fg"
+            >
+              <Trash2 size={15} strokeWidth={1.8} />
+            </button>
+          </>
         )}
       </div>
     </div>

@@ -11,23 +11,34 @@ pragma solidity ^0.8.24;
 /// by design, with no delegation or ownership transfer.
 contract MorvaRegistry {
     /// @notice A merchant's settlement configuration.
-    /// @param settlementToken ERC-20 the merchant is paid in (e.g. USDC on Arbitrum).
+    /// @param settlementToken ERC-20 the merchant is paid in (e.g. USDC).
     /// @param settlementRecipient Address funds are sent to.
     /// @param active Whether the merchant is currently accepting payments.
+    /// @param settlementChainId The chain settlementToken/settlementRecipient
+    /// live on — a real EVM chain id (e.g. 42161 for Arbitrum One), not
+    /// scoped to whatever chain this registry contract itself is deployed
+    /// on. Left unvalidated on-chain (any nonzero uint32): which chains a
+    /// buyer's Universal Account can actually settle to is a Particle
+    /// capability that evolves over time, and is enforced off-chain by the
+    /// SDK (see SUPPORTED_SETTLEMENT_CHAIN_IDS in sdk/src/config.ts) —
+    /// duplicating that allowlist here would mean redeploying this
+    /// contract every time Particle adds chain support.
     /// @param metadataURI Off-chain JSON: { name, logoUrl, description }.
-    /// @dev Field order is deliberate, not cosmetic: `active` sits directly
-    /// after `settlementRecipient` so it packs into the same storage slot
-    /// (two addresses don't fit together, but the 12 bytes left after one
-    /// address does fit a bool) — `metadataURI` is a dynamic type and would
-    /// always start a fresh slot regardless of where it's declared, so it's
-    /// last. This saves one SSTORE (~20k gas) on every registerMerchant and
-    /// updateMerchant call versus the original declaration order. Reordering
-    /// changes the ABI tuple order — safe only pre-deployment; if this ships
-    /// after a real deployment, it's a breaking change, not a refactor.
+    /// @dev Field order is deliberate, not cosmetic: `active` and
+    /// `settlementChainId` sit directly after `settlementRecipient` so
+    /// they pack into the same storage slot as it (two addresses don't fit
+    /// together, but the 12 bytes left after one address fits a bool plus
+    /// a uint32 with room to spare) — `metadataURI` is a dynamic type and
+    /// would always start a fresh slot regardless of where it's declared,
+    /// so it's last. This keeps registerMerchant/updateMerchant at 2 fixed
+    /// storage slots instead of 3. Reordering changes the ABI tuple order
+    /// — safe only pre-deployment; if this ships after a real deployment,
+    /// it's a breaking change, not a refactor.
     struct MerchantConfig {
         address settlementToken;
         address settlementRecipient;
         bool active;
+        uint32 settlementChainId;
         string metadataURI;
     }
 
@@ -35,7 +46,11 @@ contract MorvaRegistry {
 
     /// @notice Emitted once, when a merchant first registers.
     event MerchantRegistered(
-        address indexed merchant, address settlementToken, address settlementRecipient, string metadataURI
+        address indexed merchant,
+        address settlementToken,
+        address settlementRecipient,
+        uint32 settlementChainId,
+        string metadataURI
     );
 
     /// @notice Emitted whenever a registered merchant's config changes (via
@@ -46,7 +61,12 @@ contract MorvaRegistry {
     /// what actually backs the "history stays readable through past
     /// events" guarantee described below; a merchant-only event wouldn't.
     event MerchantUpdated(
-        address indexed merchant, address settlementToken, address settlementRecipient, bool active, string metadataURI
+        address indexed merchant,
+        address settlementToken,
+        address settlementRecipient,
+        bool active,
+        uint32 settlementChainId,
+        string metadataURI
     );
 
     /// @notice Thrown when `msg.sender` is already registered.
@@ -55,7 +75,8 @@ contract MorvaRegistry {
     /// @notice Thrown when `msg.sender` is not registered.
     error NotRegistered();
 
-    /// @notice Thrown when a config has a zero settlementToken or settlementRecipient.
+    /// @notice Thrown when a config has a zero settlementToken,
+    /// settlementRecipient, or settlementChainId.
     error InvalidConfig();
 
     /// @notice Registers `msg.sender` as a merchant. Reverts if already
@@ -63,27 +84,36 @@ contract MorvaRegistry {
     /// always active the moment it registers.
     function registerMerchant(MerchantConfig calldata cfg) external {
         if (_merchants[msg.sender].settlementRecipient != address(0)) revert AlreadyRegistered();
-        if (cfg.settlementToken == address(0) || cfg.settlementRecipient == address(0)) revert InvalidConfig();
+        if (cfg.settlementToken == address(0) || cfg.settlementRecipient == address(0) || cfg.settlementChainId == 0) {
+            revert InvalidConfig();
+        }
 
         _merchants[msg.sender] = MerchantConfig({
             settlementToken: cfg.settlementToken,
             settlementRecipient: cfg.settlementRecipient,
             metadataURI: cfg.metadataURI,
+            settlementChainId: cfg.settlementChainId,
             active: true
         });
 
-        emit MerchantRegistered(msg.sender, cfg.settlementToken, cfg.settlementRecipient, cfg.metadataURI);
+        emit MerchantRegistered(
+            msg.sender, cfg.settlementToken, cfg.settlementRecipient, cfg.settlementChainId, cfg.metadataURI
+        );
     }
 
     /// @notice Updates `msg.sender`'s existing config, including `active`.
     /// Reverts if `msg.sender` isn't registered yet.
     function updateMerchant(MerchantConfig calldata cfg) external {
         if (_merchants[msg.sender].settlementRecipient == address(0)) revert NotRegistered();
-        if (cfg.settlementToken == address(0) || cfg.settlementRecipient == address(0)) revert InvalidConfig();
+        if (cfg.settlementToken == address(0) || cfg.settlementRecipient == address(0) || cfg.settlementChainId == 0) {
+            revert InvalidConfig();
+        }
 
         _merchants[msg.sender] = cfg;
 
-        emit MerchantUpdated(msg.sender, cfg.settlementToken, cfg.settlementRecipient, cfg.active, cfg.metadataURI);
+        emit MerchantUpdated(
+            msg.sender, cfg.settlementToken, cfg.settlementRecipient, cfg.active, cfg.settlementChainId, cfg.metadataURI
+        );
     }
 
     /// @notice Flips `msg.sender`'s active flag without touching any other
@@ -96,7 +126,12 @@ contract MorvaRegistry {
         merchant.active = active;
 
         emit MerchantUpdated(
-            msg.sender, merchant.settlementToken, merchant.settlementRecipient, active, merchant.metadataURI
+            msg.sender,
+            merchant.settlementToken,
+            merchant.settlementRecipient,
+            active,
+            merchant.settlementChainId,
+            merchant.metadataURI
         );
     }
 

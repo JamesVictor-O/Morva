@@ -11,6 +11,7 @@ contract MorvaRegistryTest is Test {
     address internal merchantB = makeAddr("merchantB");
     address internal token = makeAddr("token");
     address internal recipient = makeAddr("recipient");
+    uint32 internal constant ARBITRUM_ONE = 42161;
 
     function setUp() public {
         registry = new MorvaRegistry();
@@ -21,8 +22,22 @@ contract MorvaRegistryTest is Test {
         pure
         returns (MorvaRegistry.MerchantConfig memory)
     {
+        return _cfg(settlementToken, settlementRecipient, uri, active, ARBITRUM_ONE);
+    }
+
+    function _cfg(
+        address settlementToken,
+        address settlementRecipient,
+        string memory uri,
+        bool active,
+        uint32 settlementChainId
+    ) internal pure returns (MorvaRegistry.MerchantConfig memory) {
         return MorvaRegistry.MerchantConfig({
-            settlementToken: settlementToken, settlementRecipient: settlementRecipient, metadataURI: uri, active: active
+            settlementToken: settlementToken,
+            settlementRecipient: settlementRecipient,
+            metadataURI: uri,
+            active: active,
+            settlementChainId: settlementChainId
         });
     }
 
@@ -36,6 +51,7 @@ contract MorvaRegistryTest is Test {
         assertEq(stored.settlementToken, token);
         assertEq(stored.settlementRecipient, recipient);
         assertEq(stored.metadataURI, "ipfs://a");
+        assertEq(stored.settlementChainId, ARBITRUM_ONE);
         assertTrue(stored.active);
     }
 
@@ -62,6 +78,12 @@ contract MorvaRegistryTest is Test {
         registry.registerMerchant(_cfg(token, address(0), "ipfs://a", true));
     }
 
+    function test_register_zeroSettlementChainId_reverts() public {
+        vm.prank(merchantA);
+        vm.expectRevert(MorvaRegistry.InvalidConfig.selector);
+        registry.registerMerchant(_cfg(token, recipient, "ipfs://a", true, 0));
+    }
+
     /// 4. update from an unregistered address reverts NotRegistered.
     function test_update_unregistered_reverts() public {
         vm.prank(merchantA);
@@ -69,24 +91,36 @@ contract MorvaRegistryTest is Test {
         registry.updateMerchant(_cfg(token, recipient, "ipfs://a", true));
     }
 
-    /// 5. update changes fields and emits MerchantUpdated.
+    /// 5. update changes fields (including settlementChainId) and emits
+    /// MerchantUpdated.
     function test_update_changesFields_andEmits() public {
         vm.startPrank(merchantA);
         registry.registerMerchant(_cfg(token, recipient, "ipfs://a", true));
 
         address newToken = makeAddr("newToken");
         address newRecipient = makeAddr("newRecipient");
+        uint32 newChainId = 8453; // Base
 
         vm.expectEmit(true, true, true, true, address(registry));
-        emit MorvaRegistry.MerchantUpdated(merchantA, newToken, newRecipient, false, "ipfs://updated");
-        registry.updateMerchant(_cfg(newToken, newRecipient, "ipfs://updated", false));
+        emit MorvaRegistry.MerchantUpdated(merchantA, newToken, newRecipient, false, newChainId, "ipfs://updated");
+        registry.updateMerchant(_cfg(newToken, newRecipient, "ipfs://updated", false, newChainId));
         vm.stopPrank();
 
         MorvaRegistry.MerchantConfig memory stored = registry.getMerchant(merchantA);
         assertEq(stored.settlementToken, newToken);
         assertEq(stored.settlementRecipient, newRecipient);
         assertEq(stored.metadataURI, "ipfs://updated");
+        assertEq(stored.settlementChainId, newChainId);
         assertFalse(stored.active);
+    }
+
+    function test_update_zeroSettlementChainId_reverts() public {
+        vm.startPrank(merchantA);
+        registry.registerMerchant(_cfg(token, recipient, "ipfs://a", true));
+
+        vm.expectRevert(MorvaRegistry.InvalidConfig.selector);
+        registry.updateMerchant(_cfg(token, recipient, "ipfs://a", true, 0));
+        vm.stopPrank();
     }
 
     /// 6. setActive(false) -> getMerchant shows inactive, MerchantUpdated
@@ -98,7 +132,7 @@ contract MorvaRegistryTest is Test {
         assertTrue(registry.getMerchant(merchantA).active);
 
         vm.expectEmit(true, true, true, true, address(registry));
-        emit MorvaRegistry.MerchantUpdated(merchantA, token, recipient, false, "ipfs://a");
+        emit MorvaRegistry.MerchantUpdated(merchantA, token, recipient, false, ARBITRUM_ONE, "ipfs://a");
         registry.setActive(false);
         assertFalse(registry.getMerchant(merchantA).active);
 
@@ -117,7 +151,7 @@ contract MorvaRegistryTest is Test {
     function test_registerMerchant_emitsExactEventFields() public {
         vm.prank(merchantA);
         vm.expectEmit(true, true, true, true, address(registry));
-        emit MorvaRegistry.MerchantRegistered(merchantA, token, recipient, "ipfs://a");
+        emit MorvaRegistry.MerchantRegistered(merchantA, token, recipient, ARBITRUM_ONE, "ipfs://a");
         registry.registerMerchant(_cfg(token, recipient, "ipfs://a", true));
     }
 
@@ -128,6 +162,7 @@ contract MorvaRegistryTest is Test {
         assertEq(stored.settlementToken, address(0));
         assertEq(stored.settlementRecipient, address(0));
         assertEq(bytes(stored.metadataURI).length, 0);
+        assertEq(stored.settlementChainId, 0);
         assertFalse(stored.active);
         assertFalse(registry.isRegistered(merchantA));
     }
@@ -159,25 +194,29 @@ contract MorvaRegistryTest is Test {
         assertTrue(registry.getMerchant(merchantB).active);
     }
 
-    /// 10. fuzz: registerMerchant with fuzzed non-zero addresses and
-    /// arbitrary metadataURI round-trips through getMerchant.
+    /// 10. fuzz: registerMerchant with fuzzed non-zero addresses, a fuzzed
+    /// non-zero settlementChainId, and arbitrary metadataURI round-trips
+    /// through getMerchant.
     function testFuzz_register_roundTrips(
         address merchant,
         address fuzzToken,
         address fuzzRecipient,
+        uint32 fuzzChainId,
         string memory uri
     ) public {
         vm.assume(merchant != address(0));
         vm.assume(fuzzToken != address(0));
         vm.assume(fuzzRecipient != address(0));
+        vm.assume(fuzzChainId != 0);
 
         vm.prank(merchant);
-        registry.registerMerchant(_cfg(fuzzToken, fuzzRecipient, uri, true));
+        registry.registerMerchant(_cfg(fuzzToken, fuzzRecipient, uri, true, fuzzChainId));
 
         MorvaRegistry.MerchantConfig memory stored = registry.getMerchant(merchant);
         assertEq(stored.settlementToken, fuzzToken);
         assertEq(stored.settlementRecipient, fuzzRecipient);
         assertEq(stored.metadataURI, uri);
+        assertEq(stored.settlementChainId, fuzzChainId);
         assertTrue(stored.active);
         assertTrue(registry.isRegistered(merchant));
     }

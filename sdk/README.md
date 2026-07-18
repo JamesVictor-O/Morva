@@ -1,12 +1,15 @@
 # @morva/sdk
 
 Headless TypeScript SDK for accepting crypto payments settled to a merchant's
-chosen token on Arbitrum One, while the buyer pays from a unified balance
-spread across whatever chains they actually hold assets on.
+chosen token, on a merchant's chosen chain, while the buyer pays from a
+unified balance spread across whatever chains they actually hold assets on.
 
 Buyers sign once. Under the hood, a Particle **Universal Account** in
 **EIP-7702 mode** upgrades the buyer's own EOA in place (no new address, no
-deposits) and routes liquidity from wherever it lives to Arbitrum One.
+deposits) and routes liquidity from wherever it lives to the settlement
+chain — Arbitrum One by default, or any of Ethereum, BNB Chain, Base, and
+X Layer, the other EVM chains Particle's Universal Account SDK supports in
+EIP-7702 mode.
 
 No React, no UI, no wallet-connect flow — this package is the payment engine
 a frontend calls into. `useEIP7702` mode means JSON-RPC browser wallets
@@ -47,6 +50,8 @@ const intent = morva.createDirectIntent({
   orderId: "order-123",
   settlementToken: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", // native USDC, Arbitrum One
   settlementRecipient: "0xYourMerchantAddress",
+  // settlementChainId: 8453, // optional — defaults to 42161 (Arbitrum One);
+  //                          // pass any SupportedSettlementChainId to settle elsewhere
 });
 
 const result = await session.pay(intent, {
@@ -85,17 +90,36 @@ await session.pay(intent, { onStatus: console.log });
 | `morva.getAllMerchants()` | `Promise<Array<{address} & MerchantConfig>>` | Active merchants only; scans `MerchantRegistered` logs from `registryDeploymentBlock`. |
 | `morva.registerMerchant(cfg, walletClient)` | `Promise<Hex>` | Merchant-side, needs a viem `WalletClient`. |
 | `morva.updateMerchant(cfg, walletClient)` | `Promise<Hex>` | Same config shape as register. |
-| `morva.createPaymentIntent({merchant, amount, orderId})` | `Promise<PaymentIntent>` | Reads settlement config from the registry; throws `MerchantInactive` if the merchant deactivated. |
-| `morva.createDirectIntent({amount, orderId, settlementToken, settlementRecipient})` | `PaymentIntent` | No registry lookup — synchronous. |
+| `morva.createPaymentIntent({merchant, amount, orderId})` | `Promise<PaymentIntent>` | Reads settlement config (incl. chain) from the registry; throws `MerchantInactive` if the merchant deactivated. |
+| `morva.createDirectIntent({amount, orderId, settlementToken, settlementRecipient, settlementChainId?})` | `PaymentIntent` | No registry lookup — synchronous. `settlementChainId` defaults to Arbitrum One. |
 | `morva.connect(signer)` | `Promise<BuyerSession>` | Constructs the buyer's Universal Account (EIP-7702 mode). |
 | `session.getUnifiedBalance()` | `Promise<UnifiedBalance>` | Cross-chain holdings, from `getPrimaryAssets()`. |
-| `session.pay(intent, {onStatus})` | `Promise<PaymentResult>` | The full sign → authorize → submit → settle sequence. |
+| `session.pay(intent, opts?)` | `Promise<PaymentResult>` | The full sign → authorize → submit → settle sequence. `opts`: `onStatus`, `onDebug`, `resumeTransactionId` (see "Retry safety"), `buildExplorerUrl`. |
 
 `MorvaConfig` fields: `particle` (required), `registryAddress`,
-`registryDeploymentBlock` (getLogs range floor), `rpcUrl` (Arbitrum One,
-defaults to the public RPC), `slippageBps` (default 100), and
+`registryDeploymentBlock` (getLogs range floor), `registryRpcUrl` (RPC for
+reading `MorvaRegistry` itself — always Arbitrum One, regardless of where
+any given merchant settles; defaults to the public Arbitrum RPC),
+`settlementRpcUrls` (per-settlement-chain RPC overrides used by `pay()`'s
+settlement-detection fallback — `Partial<Record<SupportedSettlementChainId, string>>`,
+each chain has a public default), `slippageBps` (default 100), and
 `settlementTimeoutMs` (default 120_000 — how long `pay()` polls before
 giving up on confirming settlement).
+
+### Settlement chains
+
+```ts
+import { SUPPORTED_SETTLEMENT_CHAIN_IDS, DEFAULT_SETTLEMENT_CHAIN_ID } from "@morva/sdk";
+// [1, 56, 8453, 196, 42161] — Ethereum, BNB Chain, Base, X Layer, Arbitrum One
+// DEFAULT_SETTLEMENT_CHAIN_ID === 42161
+```
+
+This is the EVM subset of what Particle's Universal Account SDK supports in
+EIP-7702 mode — Solana is excluded, since EIP-7702 has no Solana equivalent
+and this SDK forces EIP-7702 mode unconditionally (see `ua/account.ts`).
+Passing a `settlementChainId` outside this set throws `UnsupportedSettlementChain`.
+A merchant's registry config carries its own `settlementChainId`, independent
+of which chain the `MorvaRegistry` contract itself happens to be deployed on.
 
 ## Payment status lifecycle
 
@@ -103,6 +127,7 @@ giving up on confirming settlement).
 
 ```
 building → authorizing → signing → submitted → settled
+                                              ↘ unknown
                                               ↘ failed
 ```
 
@@ -113,11 +138,47 @@ building → authorizing → signing → submitted → settled
   repeat payments once delegated.
 - **signing** — the buyer signs the transaction's root hash.
 - **submitted** — broadcast succeeded; `transactionId`/`explorerUrl` exist.
-- **settled** — funds confirmed landed at `settlementRecipient` on Arbitrum
-  One (or `pay()` throws `SettlementTimeout` — the payment may still settle
-  after the timeout, that error message says so explicitly).
-- **failed** — thrown as one of the typed errors below; `pay()` never
-  resolves without either returning a settled `PaymentResult` or throwing.
+- **settled** — funds confirmed landed at `settlementRecipient` on the
+  intent's `settlementChainId`, via Particle's own status signal or, if that
+  doesn't resolve in time, a balance-delta fallback that checks the
+  recipient's on-chain balance rose by at least the expected amount (not
+  just "rose at all" — `settlementRecipient` is a merchant receiving
+  payments from many buyers, so an unrelated inflow during the same poll
+  window must never be mistaken for this payment).
+- **unknown** — thrown as `SettlementTimeout`, **not the same as failed**.
+  This means genuinely unresolved: the payment may still land after this
+  fires, especially on a congested cross-chain route. Never auto-retry
+  `pay()` from scratch on this — `SettlementTimeout.transactionId` is exactly
+  what `PayOptions.resumeTransactionId` expects on the next call, so you
+  resume checking the same transaction instead of submitting (and
+  potentially charging) a second one. See the retry-safety note below.
+- **failed** — a confirmed on-chain failure/refund, or any of the typed
+  errors below. `pay()` never resolves without either returning a settled
+  `PaymentResult` or throwing.
+
+### Retry safety
+
+`pay()` has no memory between calls — if a call throws `SettlementTimeout`,
+store `err.transactionId` against your order, and pass it back in as
+`resumeTransactionId` on the next `pay()` call for that same intent:
+
+```ts
+try {
+  const result = await session.pay(intent, { onStatus });
+} catch (err) {
+  if (err instanceof SettlementTimeout) {
+    await saveUnresolvedTransactionId(order.id, err.transactionId); // your own storage
+    // later, on retry:
+    // await session.pay(intent, { resumeTransactionId: err.transactionId });
+    return;
+  }
+  throw err;
+}
+```
+
+Without this, retrying a timed-out payment builds and submits a brand new
+transfer — if the original one does land, the buyer has now paid twice for
+one order.
 
 ## Errors
 
@@ -130,10 +191,12 @@ catches anything this SDK throws.
 | `MerchantInactive` | Merchant exists but called `setActive(false)`. |
 | `RegistryNotConfigured` | Registry call made without `registryAddress` in config. |
 | `RegistryDeploymentBlockRequired` | `getAllMerchants()` called without `registryDeploymentBlock` set. |
-| `InsufficientUnifiedBalance` | Buyer's unified balance can't cover the intent amount — only checked pre-flight when `settlementToken` is a known USD stablecoin (USDC/USDT/DAI on Arbitrum); other settlement tokens surface an underfunded payment as `MorvaSdkError` from the transfer attempt itself. |
-| `UserRejectedSignature` | The signer rejected a signature or authorization request. |
-| `SettlementTimeout` | No settlement signal within `settlementTimeoutMs`. |
-| `MorvaSdkError` | Base class; also used directly to wrap any unmapped underlying failure with `cause`. |
+| `UnsupportedSettlementChain` | A `settlementChainId` (explicit arg, or read from a merchant's registry config) isn't in `SUPPORTED_SETTLEMENT_CHAIN_IDS`. |
+| `InsufficientUnifiedBalance` | Buyer's unified balance can't cover the intent amount — only checked pre-flight when `settlementToken` is a known USD stablecoin on that chain (currently Ethereum, Base, and Arbitrum One entries — see `config.ts`); other settlement tokens/chains surface an underfunded payment as `MorvaSdkError` or `UnroutableBalance` from the transfer attempt itself. |
+| `UnroutableBalance` | Particle's own routing engine rejects the transfer as unroutable (confirmed via live testing: code `-32653`, "Insufficient primary token balance") even though `InsufficientUnifiedBalance`'s pre-check considered the buyer's aggregate balance sufficient — Particle doesn't publish the reserve/fee logic behind this. |
+| `UserRejectedSignature` | The signer reported an actual EIP-1193 rejection (code `4001`, or a "user rejected"-shaped message) — anything else from `signAuthorization`/`signMessage` (a network error, a signer bug) surfaces as `MorvaSdkError` instead, so a checkout UI never tells a buyer "you cancelled" for an infra failure. |
+| `SettlementTimeout` | No settlement signal within `settlementTimeoutMs` — see "Retry safety" above before treating this as a failure. |
+| `MorvaSdkError` | Base class; also used directly to wrap any unmapped underlying failure with `cause` (the underlying message is folded into `.message` too, not just `.cause`). |
 
 ## Signers
 

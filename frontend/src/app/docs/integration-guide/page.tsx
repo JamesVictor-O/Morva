@@ -231,8 +231,8 @@ const session = await morva.connect(signer);
       <UL>
         <LI>Confirm your <InlineCode>MorvaSigner</InlineCode> implementation never has access to a raw private key — only your embedded provider&apos;s own signing methods.</LI>
         <LI>Re-read prices/settlement config from your own trusted storage at payment time — never from client input.</LI>
-        <LI>Record orders as pending before calling <InlineCode>pay()</InlineCode>, and settled/failed after, so a crash mid-payment doesn&apos;t leave you with no record.</LI>
-        <LI>Catch <InlineCode>MorvaSdkError</InlineCode> specifically (see the <Link href="/docs/errors" className="font-semibold text-ink underline underline-offset-2">errors reference</Link>) and handle <InlineCode>InsufficientUnifiedBalance</InlineCode> and <InlineCode>SettlementTimeout</InlineCode> as distinct, expected outcomes — not generic failures.</LI>
+        <LI>Record orders as pending before calling <InlineCode>pay()</InlineCode>, and settled/failed after, so a crash mid-payment doesn&apos;t leave you with no record. A <InlineCode>SettlementTimeout</InlineCode> is neither — leave the order pending, don&apos;t mark it failed, see the next item.</LI>
+        <LI>Catch <InlineCode>MorvaSdkError</InlineCode> specifically (see the <Link href="/docs/errors" className="font-semibold text-ink underline underline-offset-2">errors reference</Link>) and handle <InlineCode>InsufficientUnifiedBalance</InlineCode>/<InlineCode>UnroutableBalance</InlineCode> and <InlineCode>SettlementTimeout</InlineCode> as distinct, expected outcomes — not generic failures. On <InlineCode>SettlementTimeout</InlineCode>, store <InlineCode>err.transactionId</InlineCode> and pass it back in as <InlineCode>resumeTransactionId</InlineCode> on retry — otherwise a retry submits a second transfer, and a buyer whose first payment does land gets charged twice.</LI>
         <LI>Show the transaction explorer link somewhere the buyer can actually find it after paying.</LI>
       </UL>
     </div>

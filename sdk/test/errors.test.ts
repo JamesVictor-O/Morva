@@ -6,6 +6,8 @@ import {
   MorvaSdkError,
   RegistryNotConfigured,
   SettlementTimeout,
+  UnroutableBalance,
+  UnsupportedSettlementChain,
   UserRejectedSignature,
 } from "../src/errors";
 
@@ -16,8 +18,10 @@ describe("error classes", () => {
       new MerchantInactive("0xabc"),
       new RegistryNotConfigured(),
       new InsufficientUnifiedBalance("10.00", "4.50"),
+      new UnroutableBalance("10.00"),
       new UserRejectedSignature(),
       new SettlementTimeout("tx-1", 120_000),
+      new UnsupportedSettlementChain(999),
     ];
 
     for (const err of errors) {
@@ -41,5 +45,11 @@ describe("error classes", () => {
     const timeout = new SettlementTimeout("tx-1", 120_000);
     expect(timeout.transactionId).toBe("tx-1");
     expect(timeout.timeoutMs).toBe(120_000);
+
+    const unsupported = new UnsupportedSettlementChain(999);
+    expect(unsupported.chainId).toBe(999);
+
+    const unroutable = new UnroutableBalance("10.00");
+    expect(unroutable.amount).toBe("10.00");
   });
 });

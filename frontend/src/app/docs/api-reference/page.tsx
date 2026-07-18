@@ -15,7 +15,8 @@ export default function ApiReferencePage() {
   particle: { projectId: string; projectClientKey: string; projectAppUuid: string };
   registryAddress?: Address;          // optional until you deploy MorvaRegistry
   registryDeploymentBlock?: bigint;   // required to call getAllMerchants()
-  rpcUrl?: string;                    // Arbitrum One RPC, defaults to the public one
+  registryRpcUrl?: string;            // RPC for reading MorvaRegistry itself (always Arbitrum One)
+  settlementRpcUrls?: Partial<Record<SupportedSettlementChainId, string>>; // per-chain overrides for pay()
   slippageBps?: number;               // default 100 (1%)
   settlementTimeoutMs?: number;       // default 120_000 — how long pay() polls for settlement
 }
@@ -44,13 +45,14 @@ function createMorva(config: MorvaConfig): Morva`}
   orderId: string;
   settlementToken: Address;
   settlementRecipient: Address;
+  settlementChainId?: SupportedSettlementChainId; // defaults to 42161 (Arbitrum One)
 }): PaymentIntent
 
 morva.createPaymentIntent({
   merchant: Address;
   amount: string;
   orderId: string;
-}): Promise<PaymentIntent>`}
+}): Promise<PaymentIntent>   // settlementChainId comes from the merchant's registry config`}
       />
 
       <H2 id="buyersession">BuyerSession</H2>
@@ -63,10 +65,19 @@ morva.createPaymentIntent({
       />
       <CodeBlock
         code={`interface PaymentResult { transactionId: string; explorerUrl: string }
-type PaymentStatus = "building" | "authorizing" | "signing" | "submitted" | "settled" | "failed";
+type PaymentStatus =
+  | "building" | "authorizing" | "signing" | "submitted" | "settled"
+  | "unknown"  // SettlementTimeout — genuinely unresolved, not a confirmed failure
+  | "failed";
 
 session.pay(intent: PaymentIntent, opts?: {
   onStatus?: (status: PaymentStatus) => void;
+  onDebug?: (event: string, detail?: Record<string, unknown>) => void;
+  // Already have a transactionId from an "unknown"-status attempt on this
+  // exact intent? Pass it here to resume polling instead of submitting a
+  // second transfer — see the errors page's retry-safety note.
+  resumeTransactionId?: string;
+  buildExplorerUrl?: (transactionId: string) => string; // defaults to universalx.app
 }): Promise<PaymentResult>`}
       />
 
@@ -79,8 +90,12 @@ session.pay(intent: PaymentIntent, opts?: {
   amount: string;               // human-readable settlement-token units, e.g. "4.99"
   settlementToken: Address;
   settlementRecipient: Address;
-  settlementChainId: 42161;     // Arbitrum One — fixed, not configurable
-}`}
+  settlementChainId: SupportedSettlementChainId; // 1 | 56 | 8453 | 196 | 42161 — defaults to 42161
+}
+
+// Every settlement chain this SDK supports — the EVM subset of what
+// Particle's Universal Account SDK supports in EIP-7702 mode.
+type SupportedSettlementChainId = 1 | 56 | 8453 | 196 | 42161;`}
       />
 
       <H3>MerchantConfig / MerchantConfigInput</H3>
@@ -88,8 +103,9 @@ session.pay(intent: PaymentIntent, opts?: {
         code={`interface MerchantConfig {
   settlementToken: Address;
   settlementRecipient: Address;
-  metadataURI: string;          // off-chain JSON: { name, logoUrl, description }
   active: boolean;
+  settlementChainId: number;    // validated against SupportedSettlementChainId when building an intent
+  metadataURI: string;          // off-chain JSON: { name, logoUrl, description }
   metadata?: MerchantMetadata;  // fetched from metadataURI, best-effort — never throws
 }
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { orderLines, orders, products } from "../db/schema";
 
@@ -65,7 +65,9 @@ export async function markOrderSettled(
   orderId: string,
   result: { transactionId: string; explorerUrl: string }
 ): Promise<void> {
-  await db
+  // Guarded by status = "pending" so a duplicate call (e.g. a retried
+  // status callback) can never decrement stock twice for the same order.
+  const updated = await db
     .update(orders)
     .set({
       status: "settled",
@@ -73,7 +75,22 @@ export async function markOrderSettled(
       explorerUrl: result.explorerUrl,
       updatedAt: new Date(),
     })
-    .where(eq(orders.id, orderId));
+    .where(and(eq(orders.id, orderId), eq(orders.status, "pending")))
+    .returning({ id: orders.id });
+
+  if (updated.length === 0) return;
+
+  const lines = await db.select().from(orderLines).where(eq(orderLines.orderId, orderId));
+  for (const line of lines) {
+    if (!line.productId) continue;
+    const [product] = await db.select().from(products).where(eq(products.id, line.productId)).limit(1);
+    if (!product) continue;
+
+    await db
+      .update(products)
+      .set({ stock: Math.max(0, product.stock - line.quantity), updatedAt: new Date() })
+      .where(eq(products.id, line.productId));
+  }
 }
 
 export async function markOrderFailed(orderId: string, reason: string): Promise<void> {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { AvatarTile } from "@/components/ui/avatar-tile";
@@ -153,11 +154,18 @@ function StatCard({
 }
 
 function PaymentRow({ payment, withDivider }: { payment: MerchantPayment; withDivider: boolean }) {
-  return (
-    <div className={`flex flex-wrap items-center gap-4 py-4 ${withDivider ? "border-t border-divider" : ""}`}>
+  const verifiable = payment.status === "settled" && Boolean(payment.explorerUrl);
+
+  const content = (
+    <>
       <AvatarTile label={payment.buyerInitials} accent={payment.accent} size="md" />
       <div className="min-w-[160px] flex-1">
-        <p className="truncate text-[15px] font-semibold text-ink">{payment.itemName}</p>
+        <p className="flex items-center gap-1.5 truncate text-[15px] font-semibold text-ink">
+          {payment.itemName}
+          {verifiable && (
+            <ExternalLink size={13} strokeWidth={2} className="flex-none text-ink-quiet" />
+          )}
+        </p>
         <p className="truncate font-mono text-[13px] text-ink-faint">
           {payment.buyerAddress} · {payment.time}
         </p>
@@ -173,6 +181,26 @@ function PaymentRow({ payment, withDivider }: { payment: MerchantPayment; withDi
           {STATUS_LABEL[payment.status]}
         </StatusPill>
       </div>
-    </div>
+    </>
   );
+
+  const className = `flex flex-wrap items-center gap-4 py-4 ${withDivider ? "border-t border-divider" : ""} ${
+    verifiable ? "-mx-2 rounded-2xl px-2 transition-colors hover:bg-fill" : ""
+  }`;
+
+  if (verifiable) {
+    return (
+      <a
+        href={payment.explorerUrl}
+        target="_blank"
+        rel="noreferrer"
+        className={className}
+        title="Verify this transaction on chain"
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return <div className={className}>{content}</div>;
 }

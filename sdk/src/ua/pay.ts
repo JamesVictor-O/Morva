@@ -1,8 +1,19 @@
-import { createPublicClient, erc20Abi, hexToBytes, http, type Hex } from "viem";
-import { arbitrum } from "viem/chains";
-import { CHAIN_ID, UA_TRANSACTION_STATUS, type UniversalAccount } from "@particle-network/universal-account-sdk";
-import { DEFAULT_ARBITRUM_RPC_URL, DEFAULT_SETTLEMENT_TIMEOUT_MS, isUsdPeggedStablecoin } from "../config";
-import { InsufficientUnifiedBalance, MorvaSdkError, SettlementTimeout, UserRejectedSignature } from "../errors";
+import { createPublicClient, erc20Abi, hexToBytes, http, parseUnits, type Hex, type PublicClient } from "viem";
+import { UA_TRANSACTION_STATUS, type UniversalAccount } from "@particle-network/universal-account-sdk";
+import {
+  DEFAULT_SETTLEMENT_TIMEOUT_MS,
+  getDefaultSettlementRpcUrl,
+  getSettlementViemChain,
+  isUsdPeggedStablecoin,
+  type SupportedSettlementChainId,
+} from "../config";
+import {
+  InsufficientUnifiedBalance,
+  MorvaSdkError,
+  SettlementTimeout,
+  UnroutableBalance,
+  UserRejectedSignature,
+} from "../errors";
 import type { PaymentIntent } from "../intents";
 import { signPendingAuthorizations } from "./authorization";
 import type { MorvaSigner } from "./signer";
@@ -14,6 +25,11 @@ export type PaymentStatus =
   | "signing"
   | "submitted"
   | "settled"
+  /** Settlement couldn't be confirmed within settlementTimeoutMs — NOT
+   *  the same as "failed". The payment may still land; treat this as
+   *  "needs reconciliation" (see SettlementTimeout) rather than a
+   *  definite loss, and never auto-retry pay() from scratch on it. */
+  | "unknown"
   | "failed";
 
 export interface PaymentResult {
@@ -23,9 +39,29 @@ export interface PaymentResult {
 
 export interface PayOptions {
   onStatus?: (status: PaymentStatus) => void;
+  /** Fires at internal settlement-detection decision points (which
+   *  signal actually resolved a payment, why a step degraded to a
+   *  fallback, or that the deadline was hit) — never required for
+   *  correctness, but this is what you want wired up when running the
+   *  e2e gate or debugging a specific payment. */
+  onDebug?: (event: string, detail?: Record<string, unknown>) => void;
   /** Default 120_000ms. */
   settlementTimeoutMs?: number;
-  rpcUrl?: string;
+  /** Per-settlement-chain RPC overrides — see MorvaConfig.settlementRpcUrls. */
+  settlementRpcUrls?: Partial<Record<SupportedSettlementChainId, string>>;
+  /** Already have a transactionId from a previous pay() call against
+   *  this exact intent — e.g. it threw with an "unknown" status after a
+   *  SettlementTimeout, and you stored the transactionId against the
+   *  order? Pass it here to resume polling that existing transaction
+   *  instead of building, signing, and submitting a brand new transfer.
+   *  This is the guard against double-charging a buyer on retry — pay()
+   *  has no persistent memory of its own between calls, so this is the
+   *  caller's half of that contract. */
+  resumeTransactionId?: string;
+  /** Builds the receipt URL from a transactionId. Defaults to
+   *  universalx.app's activity page — override if you don't want your
+   *  integration's receipts depending on a third-party app's URL scheme. */
+  buildExplorerUrl?: (transactionId: string) => string;
 }
 
 const POLL_INTERVAL_MS = 3_000;
@@ -37,6 +73,10 @@ const FAILED_STATUS_CODES: number[] = [
   UA_TRANSACTION_STATUS.PENNY_FAILED,
 ];
 
+function defaultExplorerUrl(transactionId: string): string {
+  return `https://universalx.app/activity/details?id=${transactionId}`;
+}
+
 export async function pay(
   ua: UniversalAccount,
   signer: MorvaSigner,
@@ -44,6 +84,18 @@ export async function pay(
   opts: PayOptions = {}
 ): Promise<PaymentResult> {
   const onStatus = opts.onStatus ?? (() => {});
+  const onDebug = opts.onDebug ?? (() => {});
+  const buildExplorerUrl = opts.buildExplorerUrl ?? defaultExplorerUrl;
+
+  // Resuming a previous attempt: skip straight to settlement detection
+  // instead of building/signing/submitting a brand new transfer. See
+  // PayOptions.resumeTransactionId — this is the retry-safety contract.
+  if (opts.resumeTransactionId) {
+    const transactionId = opts.resumeTransactionId;
+    onStatus("submitted");
+    await finalizeSettlement(ua, transactionId, intent, opts, onStatus, onDebug);
+    return { transactionId, explorerUrl: buildExplorerUrl(transactionId) };
+  }
 
   onStatus("building");
 
@@ -51,23 +103,40 @@ export async function pay(
   // ~1:1 USD stablecoin — intent.amount is in settlementToken units, not
   // USD. For any other token (ETH, WETH, an NFT-collection token, ...)
   // this is skipped; an actually-insufficient balance still surfaces
-  // below, from the real transfer attempt, as a MorvaSdkError.
+  // below, from the real transfer attempt, as UnroutableBalance.
   const balance = await getUnifiedBalance(ua);
-  if (isUsdPeggedStablecoin(intent.settlementToken) && Number(balance.totalUsd) < Number(intent.amount)) {
+  if (
+    isUsdPeggedStablecoin(intent.settlementChainId, intent.settlementToken) &&
+    Number(balance.totalUsd) < Number(intent.amount)
+  ) {
     onStatus("failed");
     throw new InsufficientUnifiedBalance(intent.amount, balance.totalUsd);
   }
 
-  const transaction = await tryStep(
-    () =>
-      ua.createTransferTransaction({
-        token: { chainId: CHAIN_ID.ARBITRUM_MAINNET_ONE, address: intent.settlementToken },
-        amount: intent.amount,
-        receiver: intent.settlementRecipient,
-      }),
-    "Failed to build payment transaction",
-    onStatus
-  );
+  let transaction: Awaited<ReturnType<UniversalAccount["createTransferTransaction"]>>;
+  try {
+    transaction = await ua.createTransferTransaction({
+      // Particle's CHAIN_ID enum values match real EVM chain ids 1:1 for
+      // every chain this SDK supports settling to (see config.ts) — no
+      // separate mapping needed.
+      token: { chainId: intent.settlementChainId, address: intent.settlementToken },
+      amount: intent.amount,
+      receiver: intent.settlementRecipient,
+    });
+  } catch (err) {
+    onStatus("failed");
+    // Particle's own routing engine rejects some transfers as
+    // unroutable (code -32653, confirmed via live testing against real
+    // wallets) even when the unified-balance pre-check above considered
+    // them sufficient — it doesn't know Particle's own fee/reserve
+    // requirements. Map it to a distinct, semantic error rather than the
+    // generic wrapper below, so integrators have one error type for
+    // "buyer can't cover this," not two depending on where it failed.
+    if (isUnroutableBalanceError(err)) {
+      throw new UnroutableBalance(intent.amount, err);
+    }
+    throw new MorvaSdkError(`Failed to build payment transaction: ${describeError(err)}`, { cause: err });
+  }
 
   onStatus("authorizing");
   const authorizations = await tryAuthorizationStep(
@@ -81,6 +150,20 @@ export async function pay(
     return signer.signMessage(messageBytes);
   }, onStatus);
 
+  // Baseline for the balance-delta settlement fallback, captured BEFORE
+  // submission — not on the first poll iteration. Capturing it after
+  // sendTransaction (the previous behavior) meant a same-chain transfer
+  // that settled in the first few seconds would already be reflected in
+  // the "before" reading, so the delta check could never fire and a
+  // successful payment could time out as if it had failed.
+  let baseline: SettlementBaseline;
+  try {
+    baseline = await computeSettlementBaseline(intent, opts);
+  } catch (err) {
+    onStatus("failed");
+    throw new MorvaSdkError(`Failed to prepare settlement detection: ${describeError(err)}`, { cause: err });
+  }
+
   const result = await tryStep(
     () => ua.sendTransaction(transaction, signature, authorizations),
     "Failed to submit payment transaction",
@@ -89,20 +172,37 @@ export async function pay(
   onStatus("submitted");
 
   const transactionId: string = result.transactionId;
-  const explorerUrl = `https://universalx.app/activity/details?id=${transactionId}`;
+  await finalizeSettlement(ua, transactionId, intent, opts, onStatus, onDebug, baseline);
 
+  return { transactionId, explorerUrl: buildExplorerUrl(transactionId) };
+}
+
+/** Waits for settlement and translates the outcome into the right
+ *  onStatus signal: "settled" on success, "unknown" (not "failed") on a
+ *  SettlementTimeout — since that specifically means unresolved, not
+ *  confirmed-wrong — and "failed" only for a confirmed on-chain failure
+ *  or any other error. */
+async function finalizeSettlement(
+  ua: UniversalAccount,
+  transactionId: string,
+  intent: PaymentIntent,
+  opts: PayOptions,
+  onStatus: (status: PaymentStatus) => void,
+  onDebug: (event: string, detail?: Record<string, unknown>) => void,
+  precomputedBaseline?: SettlementBaseline
+): Promise<void> {
   try {
+    const baseline = precomputedBaseline ?? (await computeSettlementBaseline(intent, opts));
     await waitForSettlement(ua, transactionId, intent, {
       timeoutMs: opts.settlementTimeoutMs ?? DEFAULT_SETTLEMENT_TIMEOUT_MS,
-      rpcUrl: opts.rpcUrl,
+      onDebug,
+      ...baseline,
     });
   } catch (err) {
-    onStatus("failed");
+    onStatus(err instanceof SettlementTimeout ? "unknown" : "failed");
     throw err;
   }
   onStatus("settled");
-
-  return { transactionId, explorerUrl };
 }
 
 async function tryStep<T>(
@@ -114,8 +214,38 @@ async function tryStep<T>(
     return await fn();
   } catch (err) {
     onStatus("failed");
-    throw new MorvaSdkError(message, { cause: err });
+    // The underlying reason (e.g. Particle's own "Insufficient primary
+    // token balance") is folded into the message itself, not just left on
+    // .cause — callers that show err.message directly to a buyer, or log
+    // it without unwrapping .cause, still see the real reason instead of
+    // this generic wrapper alone.
+    throw new MorvaSdkError(`${message}: ${describeError(err)}`, { cause: err });
   }
+}
+
+function describeError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function errorCode(err: unknown): unknown {
+  return typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined;
+}
+
+/** Particle's UniversalError carries this as .code (confirmed via live
+ *  testing against real wallets); matched on message too since neither
+ *  the code nor the message format is documented as a stable contract. */
+function isUnroutableBalanceError(err: unknown): boolean {
+  if (errorCode(err) === -32653) return true;
+  return /insufficient primary token balance/i.test(describeError(err));
+}
+
+/** EIP-1193's standard user-rejection code, plus a message fallback for
+ *  signers that don't surface it — anything else (a network error, a
+ *  malformed request, a signer bug) is NOT a user rejection and must not
+ *  be reported as one. */
+function isUserRejection(err: unknown): boolean {
+  if (errorCode(err) === 4001) return true;
+  return /user rejected|user denied|rejected the request/i.test(describeError(err));
 }
 
 async function tryAuthorizationStep<T>(
@@ -126,8 +256,47 @@ async function tryAuthorizationStep<T>(
     return await fn();
   } catch (err) {
     onStatus("failed");
-    throw new UserRejectedSignature(err);
+    if (isUserRejection(err)) throw new UserRejectedSignature(err);
+    // Anything else — a network failure, a malformed rootHash, a signer
+    // bug — is not the buyer cancelling, and must not be reported to a
+    // checkout UI (or counted in abandonment analytics) as if it were.
+    throw new MorvaSdkError(`Signature request failed: ${describeError(err)}`, { cause: err });
   }
+}
+
+interface SettlementBaseline {
+  publicClient: PublicClient;
+  expectedAmountBaseUnits: bigint;
+  balanceBefore: bigint;
+}
+
+/** Reads the settlement token's decimals and the recipient's current
+ *  balance once, before submission (or, for a resumed payment, once at
+ *  resume time — an inherently weaker baseline, since a payment may have
+ *  already landed before this process started polling for it; getTransaction()
+ *  is the authoritative signal in that case, this is only the fallback). */
+async function computeSettlementBaseline(intent: PaymentIntent, opts: PayOptions): Promise<SettlementBaseline> {
+  const publicClient = createPublicClient({
+    chain: getSettlementViemChain(intent.settlementChainId),
+    transport: http(
+      opts.settlementRpcUrls?.[intent.settlementChainId] ?? getDefaultSettlementRpcUrl(intent.settlementChainId)
+    ),
+  });
+
+  const [decimals, balanceBefore] = await Promise.all([
+    publicClient.readContract({
+      address: intent.settlementToken,
+      abi: erc20Abi,
+      functionName: "decimals",
+    }),
+    readRecipientBalance(intent, publicClient),
+  ]);
+
+  return {
+    publicClient,
+    expectedAmountBaseUnits: parseUnits(intent.amount, decimals),
+    balanceBefore,
+  };
 }
 
 /**
@@ -136,57 +305,73 @@ async function tryAuthorizationStep<T>(
  * real shape for a settled transfer. UA_TRANSACTION_STATUS is exported
  * and strongly implies a numeric `.status` field, so that's tried first —
  * but if it never resolves to a recognized terminal value before the
- * timeout, this falls back to polling the recipient's on-chain ERC-20
- * balance directly via viem, per the task brief's explicit fallback
- * instruction. scripts/e2e-payment.ts (Gate 2) is what actually proves
- * which signal fires in practice; harden this once that's run.
+ * timeout, this falls back to comparing the recipient's on-chain ERC-20
+ * balance against a pre-submission baseline plus the exact expected
+ * amount (not "any balance increase" — the settlement recipient is a
+ * merchant receiving payments from many buyers concurrently, so an
+ * unrelated inflow during this poll window must never be mistaken for
+ * this payment).
  */
 async function waitForSettlement(
   ua: UniversalAccount,
   transactionId: string,
   intent: PaymentIntent,
-  opts: { timeoutMs: number; rpcUrl?: string }
+  opts: {
+    timeoutMs: number;
+    publicClient: PublicClient;
+    expectedAmountBaseUnits: bigint;
+    balanceBefore: bigint;
+    onDebug: (event: string, detail?: Record<string, unknown>) => void;
+  }
 ): Promise<void> {
-  const deadline = Date.now() + opts.timeoutMs;
-  const publicClient = createPublicClient({
-    chain: arbitrum,
-    transport: http(opts.rpcUrl ?? DEFAULT_ARBITRUM_RPC_URL),
-  });
-
-  let balanceBefore: bigint | undefined;
+  const { timeoutMs, publicClient, expectedAmountBaseUnits, balanceBefore, onDebug } = opts;
+  const deadline = Date.now() + timeoutMs;
+  const requiredBalance = balanceBefore + expectedAmountBaseUnits;
 
   while (Date.now() < deadline) {
     try {
       const status = (await ua.getTransaction(transactionId)) as { status?: number } | undefined;
       const code = status?.status;
-      if (code === UA_TRANSACTION_STATUS.FINISHED) return;
+      if (code === UA_TRANSACTION_STATUS.FINISHED) {
+        onDebug("settlement_resolved", { via: "getTransaction", transactionId });
+        return;
+      }
       if (code !== undefined && FAILED_STATUS_CODES.includes(code)) {
+        onDebug("settlement_failed_confirmed", { transactionId, code });
         throw new MorvaSdkError(
           `Transaction ${transactionId} settled as failed/refunded (status ${code})`
         );
       }
     } catch (err) {
       if (err instanceof MorvaSdkError) throw err;
+      onDebug("get_transaction_error", { transactionId, error: describeError(err) });
       // getTransaction() itself failing transiently — fall through to the
       // balance check below rather than aborting the whole payment.
     }
 
-    const currentBalance = await readRecipientBalance(intent, publicClient);
-    if (balanceBefore === undefined) {
-      balanceBefore = currentBalance;
-    } else if (currentBalance > balanceBefore) {
-      return;
+    try {
+      const currentBalance = await readRecipientBalance(intent, publicClient);
+      if (currentBalance >= requiredBalance) {
+        onDebug("settlement_resolved", { via: "balance_delta", transactionId });
+        return;
+      }
+    } catch (err) {
+      // A transient RPC error here (rate limit, timeout — the default is
+      // a public RPC) must never abort a payment that may already be
+      // mid-flight. Skip this poll, try again next interval.
+      onDebug("balance_poll_error", { transactionId, error: describeError(err) });
     }
 
     await sleep(POLL_INTERVAL_MS);
   }
 
-  throw new SettlementTimeout(transactionId, opts.timeoutMs);
+  onDebug("settlement_timeout", { transactionId });
+  throw new SettlementTimeout(transactionId, timeoutMs);
 }
 
 async function readRecipientBalance(
   intent: PaymentIntent,
-  publicClient: ReturnType<typeof createPublicClient>
+  publicClient: PublicClient
 ): Promise<bigint> {
   return publicClient.readContract({
     address: intent.settlementToken,

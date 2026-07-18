@@ -45,6 +45,7 @@ describe("RegistryClient", () => {
         settlementRecipient: RECIPIENT,
         metadataURI: "",
         active: true,
+        settlementChainId: 42161,
       }),
     });
     const client = new RegistryClient(publicClient, REGISTRY);
@@ -55,6 +56,7 @@ describe("RegistryClient", () => {
       settlementRecipient: RECIPIENT,
       metadataURI: "",
       active: true,
+      settlementChainId: 42161,
       metadata: undefined,
     });
   });
@@ -63,9 +65,21 @@ describe("RegistryClient", () => {
     const readContract = vi.fn(async (params: { args: readonly [string] }) => {
       const [merchant] = params.args;
       if (merchant === MERCHANT_A) {
-        return { settlementToken: TOKEN, settlementRecipient: RECIPIENT, metadataURI: "", active: true };
+        return {
+          settlementToken: TOKEN,
+          settlementRecipient: RECIPIENT,
+          metadataURI: "",
+          active: true,
+          settlementChainId: 42161,
+        };
       }
-      return { settlementToken: TOKEN, settlementRecipient: RECIPIENT, metadataURI: "", active: false };
+      return {
+        settlementToken: TOKEN,
+        settlementRecipient: RECIPIENT,
+        metadataURI: "",
+        active: false,
+        settlementChainId: 42161,
+      };
     }) as unknown as PublicClient["readContract"];
     const getLogs = vi.fn().mockResolvedValue([
       { args: { merchant: MERCHANT_A } },

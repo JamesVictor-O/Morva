@@ -16,17 +16,19 @@ import { MagicSigner } from "@/lib/magic-signer";
 import { createPendingOrder, markOrderFailed, markOrderSettled } from "@/lib/actions/orders";
 import { formatUsd } from "@/lib/format";
 import type { Stall } from "@/lib/types";
-import { createMorva, type PaymentStatus as SdkPaymentStatus } from "@morva/sdk";
+import { createMorva, SettlementTimeout, type PaymentStatus as SdkPaymentStatus } from "@morva/sdk";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
 type Step = "review" | "processing" | "success";
 
-// Only USDC on Arbitrum One is wired up today — this exact address is the
-// one already proven live by sdk/scripts/e2e-payment.ts (Gate 2), not a
-// freshly-typed one. A stall configured for any other payout token shows a
-// clear error at pay time rather than attempting a transfer to a guessed
-// contract address.
+// Only USDC on Arbitrum One is wired up in Plaza today — a Plaza scope
+// choice (stalls don't yet store a payout chain/token beyond this), not an
+// SDK limitation; @morva/sdk itself supports settling to any of
+// SUPPORTED_SETTLEMENT_CHAIN_IDS. This exact address is the one already
+// proven live by sdk/scripts/e2e-payment.ts (Gate 2), not a freshly-typed
+// one. A stall configured for any other payout token shows a clear error
+// at pay time rather than attempting a transfer to a guessed address.
 const TOKEN_ADDRESSES: Record<string, `0x${string}`> = {
   USDC: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
 };
@@ -37,6 +39,7 @@ const STATUS_LABEL: Record<SdkPaymentStatus, string> = {
   signing: "Waiting for your signature…",
   submitted: "Submitting…",
   settled: "Settled!",
+  unknown: "Still confirming…",
   failed: "Something went wrong.",
 };
 
@@ -59,6 +62,17 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
   const [completedOrder, setCompletedOrder] = useState<CompletedOrder | null>(null);
   const [payStatusLabel, setPayStatusLabel] = useState<string | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
+  // Set only when a payment's settlement couldn't be confirmed in time
+  // (SettlementTimeout) — genuinely unresolved, not a confirmed failure,
+  // so the order is deliberately left "pending" rather than marked
+  // failed. Clicking pay again resumes checking this exact transaction
+  // instead of submitting a brand new transfer for the same order.
+  const [unresolvedAttempt, setUnresolvedAttempt] = useState<{
+    orderId: string;
+    orderNumber: string;
+    transactionId: string;
+    total: number;
+  } | null>(null);
 
   if (status !== "authenticated") {
     return (
@@ -98,14 +112,24 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
     setPayStatusLabel(STATUS_LABEL.building);
 
     let orderId: string | undefined;
+    let orderNumber: string | undefined;
     try {
-      const pending = await createPendingOrder({
-        stallId: stall.id,
-        buyerAddress: user.publicAddress,
-        buyerEmail: email || undefined,
-        lines: lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
-      });
+      // Resuming a payment whose settlement we couldn't confirm last
+      // time — reuse the same order and transaction instead of creating
+      // a new pending order and submitting a second transfer for it. Only
+      // valid if the cart hasn't changed since — a different total means
+      // a different intent, so resuming the old transaction would be wrong.
+      const resumable = unresolvedAttempt && unresolvedAttempt.total === total ? unresolvedAttempt : null;
+      const pending = resumable
+        ? { orderId: resumable.orderId, orderNumber: resumable.orderNumber }
+        : await createPendingOrder({
+            stallId: stall.id,
+            buyerAddress: user.publicAddress,
+            buyerEmail: email || undefined,
+            lines: lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+          });
       orderId = pending.orderId;
+      orderNumber = pending.orderNumber;
 
       const magic = getMagic();
       if (!magic) throw new Error("Sign-in isn't configured.");
@@ -130,12 +154,19 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
         orderId: pending.orderNumber,
         settlementToken: tokenAddress,
         settlementRecipient: stall.payoutAddress as `0x${string}`,
+        // Explicit, not just relying on the SDK's default: Morva Plaza
+        // settles on Arbitrum One today (stalls don't yet have a
+        // per-merchant chain preference — see TOKEN_ADDRESSES above). The
+        // SDK itself supports any of SUPPORTED_SETTLEMENT_CHAIN_IDS.
+        settlementChainId: 42161,
       });
 
       const result = await session.pay(intent, {
         onStatus: (status) => setPayStatusLabel(STATUS_LABEL[status]),
+        resumeTransactionId: resumable?.transactionId,
       });
 
+      setUnresolvedAttempt(null);
       await markOrderSettled(pending.orderId, result);
 
       setCompletedOrder({
@@ -149,6 +180,32 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
       setStep("success");
       cart.clear();
     } catch (err) {
+      // err.message alone (what's shown below and persisted to the order)
+      // is a generic wrapper — the actual underlying reason from Particle
+      // is on .cause and otherwise never surfaces anywhere.
+      console.error("[Morva] checkout payment failed:", err, err instanceof Error ? err.cause : undefined);
+
+      if (err instanceof SettlementTimeout) {
+        // Genuinely unresolved, not a confirmed failure — the payment may
+        // still land. Leave the order "pending" (never call
+        // markOrderFailed for this) and remember the transactionId so the
+        // next pay() click resumes checking THIS transaction instead of
+        // submitting a second transfer for the same order.
+        if (orderId && orderNumber) {
+          setUnresolvedAttempt({
+            orderId,
+            orderNumber,
+            transactionId: err.transactionId,
+            total,
+          });
+        }
+        setPayError(
+          "We couldn't confirm this payment in time, but it may still complete. Wait a moment, then try again — we'll pick up checking the same payment rather than charging you twice."
+        );
+        setStep("review");
+        return;
+      }
+
       if (orderId) {
         await markOrderFailed(orderId, err instanceof Error ? err.message : "Unknown error").catch(() => {});
       }
@@ -178,7 +235,10 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
 
       <main className="mx-auto grid max-w-[1100px] gap-8 px-5 pb-20 sm:px-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-start lg:gap-12">
         {/* Left: order review */}
-        <div>
+        {/* min-w-0: grid items default to min-width:auto, which lets a
+            nowrap-truncated child's full intrinsic text width force this
+            column (and the whole grid/page) wider than the viewport. */}
+        <div className="min-w-0">
           <p className="text-[15px] text-ink-soft">You&apos;re paying</p>
           <p className="mt-1 text-[52px] font-semibold leading-none tracking-tight text-ink sm:text-[60px]">
             ${formatUsd(total)}

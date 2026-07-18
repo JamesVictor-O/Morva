@@ -26,6 +26,14 @@ export function createUniversalAccount(config: MorvaConfig, ownerAddress: Addres
     tradeConfig: {
       slippageBps: config.slippageBps ?? DEFAULT_SLIPPAGE_BPS,
     },
-    rpcUrl: config.rpcUrl,
+    // Deliberately not wired to MorvaConfig's registryRpcUrl/
+    // settlementRpcUrls: this constructor's own `rpcUrl` field is not a
+    // blockchain node endpoint — it's the endpoint the pinned Particle
+    // SDK posts its own `universal_*` backend RPC calls to internally
+    // (defaults to https://universal-rpc-proxy.particle.network), a
+    // completely different concept from an Arbitrum/Base/etc. JSON-RPC
+    // node. Confirmed by reading the pinned 2.0.3 build directly, since
+    // this isn't documented. Passing our own chain RPC here would
+    // silently redirect Particle's own backend calls to the wrong place.
   });
 }

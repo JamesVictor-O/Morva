@@ -80,6 +80,7 @@ export interface MerchantProduct {
   name: string;
   meta: string;
   priceUsd: number;
+  photoUrl?: string;
   stock: number;
   status: MerchantProductStatus;
 }

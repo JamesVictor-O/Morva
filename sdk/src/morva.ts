@@ -1,6 +1,6 @@
 import { createPublicClient, http, type Address, type Hex, type WalletClient } from "viem";
 import { arbitrum } from "viem/chains";
-import { DEFAULT_ARBITRUM_RPC_URL, type MorvaConfig } from "./config";
+import { DEFAULT_ARBITRUM_RPC_URL, type MorvaConfig, type SupportedSettlementChainId } from "./config";
 import { MerchantInactive } from "./errors";
 import { buildDirectIntent, buildPaymentIntentFromMerchant, type PaymentIntent } from "./intents";
 import { RegistryClient, type MerchantConfig, type MerchantConfigInput } from "./registry/client";
@@ -12,9 +12,13 @@ export class Morva {
   private readonly registry: RegistryClient;
 
   constructor(private readonly config: MorvaConfig) {
+    // The registry contract always lives on Arbitrum One regardless of
+    // where any given merchant settles — this client is for reading it,
+    // not for settlement. See ua/pay.ts for the per-settlement-chain
+    // client used at payment time.
     const publicClient = createPublicClient({
       chain: arbitrum,
-      transport: http(config.rpcUrl ?? DEFAULT_ARBITRUM_RPC_URL),
+      transport: http(config.registryRpcUrl ?? DEFAULT_ARBITRUM_RPC_URL),
     });
     this.registry = new RegistryClient(publicClient, config.registryAddress, config.registryDeploymentBlock);
   }
@@ -42,6 +46,9 @@ export class Morva {
     orderId: string;
     settlementToken: Address;
     settlementRecipient: Address;
+    /** Defaults to Arbitrum One — pass any SUPPORTED_SETTLEMENT_CHAIN_IDS
+     *  entry to settle elsewhere. */
+    settlementChainId?: SupportedSettlementChainId;
   }): PaymentIntent {
     return buildDirectIntent(args);
   }

@@ -46,15 +46,16 @@ Buyer's existing wallet (Magic embedded, or any EIP-7702-capable signer)
 Particle Universal Account ── reads balance across every supported chain
         │  one signature — routing, sourcing, and gas handled underneath
         ▼
-Arbitrum One ── fixed settlement chain
-        │
+Merchant's chosen settlement chain ── Arbitrum One by default, or any of
+        │                             Ethereum, BNB Chain, Base, X Layer
         ▼
 Merchant's settlementRecipient receives exactly the token they configured
 ```
 
 Nothing in that chain is a new primitive. It's Particle Network's Universal
-Accounts, Magic's embedded wallet, and a single Arbitrum settlement leg,
-wired together so the person paying never has to know any of it happened.
+Accounts, Magic's embedded wallet, and a single settlement leg to whichever
+chain the merchant configured, wired together so the person paying never
+has to know any of it happened.
 
 ---
 
@@ -88,7 +89,7 @@ buyer's *own* EOA in place — same address, no new address to fund, no
 migration step:
 
 - **Account construction, forced EIP-7702** —
-  [`sdk/src/ua/account.ts`](sdk/src/ua/account.ts#L12-L31) — `useEIP7702: true`
+  [`sdk/src/ua/account.ts`](sdk/src/ua/account.ts#L15-L39) — `useEIP7702: true`
   is not a config option here, it's the only path.
 - **EIP-7702 authorization signing** —
   [`sdk/src/ua/authorization.ts`](sdk/src/ua/authorization.ts#L15-L55) —
@@ -99,13 +100,16 @@ migration step:
   [`sdk/src/ua/balance.ts`](sdk/src/ua/balance.ts#L24-L45) — maps
   `getPrimaryAssets()` into a per-asset, per-chain breakdown.
 - **The payment execution + settlement detection** —
-  [`sdk/src/ua/pay.ts`](sdk/src/ua/pay.ts#L40-L196) — builds the transfer,
-  submits it, and confirms settlement. Particle's own
-  `getTransaction()` response is untyped (`Promise<any>`) in the pinned SDK
-  version, so settlement detection has a real fallback: if Particle's status
-  signal doesn't resolve, it polls the settlement token's on-chain balance
-  at the recipient directly via viem — see
-  [L139–196](sdk/src/ua/pay.ts#L139-L196).
+  [`sdk/src/ua/pay.ts`](sdk/src/ua/pay.ts#L46-L118) — builds the transfer
+  against the intent's `settlementChainId` (any of
+  `SUPPORTED_SETTLEMENT_CHAIN_IDS`, Arbitrum One by default — see
+  [`sdk/src/config.ts`](sdk/src/config.ts#L13)), submits it, and confirms
+  settlement. Particle's own `getTransaction()` response is untyped
+  (`Promise<any>`) in the pinned SDK version, so settlement detection has a
+  real fallback: if Particle's status signal doesn't resolve, it polls the
+  settlement token's on-chain balance at the recipient directly via viem,
+  against a public client built for that same settlement chain — see
+  [L156–197](sdk/src/ua/pay.ts#L156-L197).
 - **Pinned dependency, deliberately** —
   [`sdk/src/ua/account.ts#L5-L10`](sdk/src/ua/account.ts#L5-L10) explains
   why: Universal Accounts was mid-migration to a V2 API surface at build
@@ -137,16 +141,22 @@ with native 7702 support do. Magic is the one proven here.
   more. `LocalSigner` in the same file is the raw-private-key
   implementation used only by tests and the e2e script — never a browser.
 
-### Arbitrum One — the fixed settlement chain
+### Arbitrum One — the default settlement chain, not the only one
 
-Merchants choose *which token* they settle in, never which chain — that's a
-structural decision, not a default. `PaymentIntent.settlementChainId` is
-typed as a literal:
-[`sdk/src/intents.ts#L12`](sdk/src/intents.ts#L12), and the constant it
-resolves to is defined at
-[`sdk/src/config.ts#L30`](sdk/src/config.ts#L30). One chain to monitor, low
-gas for the final leg, no cross-chain settlement risk on the merchant's
-side regardless of how many chains the buyer's liquidity came from.
+Merchants choose both *which token* and *which chain* they settle to.
+`PaymentIntent.settlementChainId`
+([`sdk/src/intents.ts#L13`](sdk/src/intents.ts#L13)) is typed as a union of
+the five EVM chains Particle's Universal Account SDK supports in EIP-7702
+mode — Ethereum, BNB Chain, Base, X Layer, and Arbitrum One
+([`sdk/src/config.ts#L13`](sdk/src/config.ts#L13)); Solana is deliberately
+excluded, since EIP-7702 has no Solana equivalent. Arbitrum One is only the
+*default* when a caller doesn't specify one
+([`sdk/src/config.ts#L25`](sdk/src/config.ts#L25)) — chosen because it's
+what this repo's own reference storefront, Morva Plaza, settles to: one
+chain to monitor, low gas for the final leg, no cross-chain settlement risk
+on the merchant's side regardless of how many chains the buyer's liquidity
+came from. A merchant integrating this SDK directly isn't limited to that
+choice.
 
 ### MorvaRegistry — optional on-chain merchant identity
 
@@ -224,7 +234,8 @@ served live at `/docs/integration-guide`.
 |---|---|
 | Chain abstraction | Particle Network Universal Accounts, EIP-7702 mode |
 | Buyer signer | Magic embedded wallets (email/social login, no seed phrase) |
-| Settlement + registry | Arbitrum One |
+| Settlement | Merchant-configurable — Arbitrum One (default), Ethereum, BNB Chain, Base, or X Layer |
+| Registry | Arbitrum One |
 | Signature/EVM library | viem — the only one, deliberately (no `ethers`) |
 | Contracts | Solidity 0.8.24, Foundry |
 | SDK build | TypeScript, tsup (ESM + CJS + `.d.ts`), vitest |
@@ -276,6 +287,6 @@ for what each is used for.
 
 - ✅ Universal Accounts SDK in EIP-7702 mode — the payment path itself, not a bolt-on ([`sdk/src/ua/account.ts`](sdk/src/ua/account.ts))
 - ✅ Cross-chain value movement via UA — every purchase sources liquidity across chains automatically
-- ✅ Settlement fixed to Arbitrum One — every payment, hardcoded not configurable ([`sdk/src/intents.ts`](sdk/src/intents.ts#L12), [`sdk/src/config.ts`](sdk/src/config.ts#L30))
+- ✅ Arbitrum One as the default settlement chain, real in production — every payment in this repo's own demo (Morva Plaza) settles there today ([`frontend/src/components/checkout/checkout-page-client.tsx`](frontend/src/components/checkout/checkout-page-client.tsx#L123-L134)), while the SDK itself supports merchant-chosen settlement across 5 EVM chains ([`sdk/src/config.ts`](sdk/src/config.ts#L13))
 - 🔲 `MorvaRegistry` — built, tested (12 tests incl. a 256-run fuzz test), gas-audited; **not yet deployed to Arbitrum One mainnet** ([`contracts/src/MorvaRegistry.sol`](contracts/src/MorvaRegistry.sol)). The live payment path uses `createDirectIntent()` today, which doesn't require the registry — see [Core concepts](frontend/src/app/docs/concepts/page.tsx) for why that's a deliberate, not accidental, choice.
 - ✅ Chain-abstracted, familiar UX — email sign-in via Magic, one signature, no bridging UI, no network switching

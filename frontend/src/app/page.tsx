@@ -24,6 +24,7 @@ const intent = morva.createDirectIntent({
   orderId: "order-123",
   settlementToken: "0xaf88…e5831", // USDC, Arbitrum One
   settlementRecipient: "0xYourMerchantAddress",
+  // settlementChainId: 8453, optional — defaults to Arbitrum One
 });
 
 const result = await session.pay(intent, {
@@ -35,7 +36,7 @@ console.log(result.transactionId, result.explorerUrl);`;
 const STEPS = [
   {
     title: "Merchant registers once",
-    body: "Settlement token and recipient address, written to MorvaRegistry on Arbitrum One. That's the whole setup.",
+    body: "Settlement token, recipient address, and settlement chain, written to MorvaRegistry. That's the whole setup.",
   },
   {
     title: "Buyer connects their own wallet",
@@ -47,7 +48,7 @@ const STEPS = [
   },
   {
     title: "Merchant settles",
-    body: "Exactly the token they configured, on Arbitrum One, every time — regardless of what the buyer paid with.",
+    body: "Exactly the token and chain they configured, every time — regardless of what the buyer paid with or where.",
   },
 ];
 
