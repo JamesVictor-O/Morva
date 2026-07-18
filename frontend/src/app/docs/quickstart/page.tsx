@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import { H1, Lead, H2, P, Callout, InlineCode } from "@/components/docs/prose";
 import { CodeBlock } from "@/components/sdk/code-block";
 import { CopyChip } from "@/components/sdk/copy-chip";
@@ -16,8 +17,17 @@ export default function QuickstartPage() {
 
       <H2 id="install">1. Install</H2>
       <P>Requires no peer dependencies beyond what&apos;s already bundled (viem, the pinned Particle Universal Account SDK).</P>
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap items-center gap-3">
         <CopyChip text="pnpm add @morva/sdk" />
+        <a
+          href="https://www.npmjs.com/package/@morva/sdk"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1.5 text-[14px] font-semibold text-ink underline underline-offset-2"
+        >
+          View package on npm
+          <ExternalLink size={14} strokeWidth={1.8} />
+        </a>
       </div>
 
       <H2 id="particle-project">2. Get a Particle project</H2>

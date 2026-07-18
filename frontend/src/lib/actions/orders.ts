@@ -3,6 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { orderLines, orders, products } from "../db/schema";
+import { getOrdersByBuyerAddress, type BuyerOrder } from "../data/orders";
 
 export interface CheckoutLine {
   productId: string;
@@ -28,6 +29,12 @@ export async function createPendingOrder(params: {
   const lineValues = params.lines.map((line) => {
     const product = byId.get(line.productId);
     if (!product) throw new Error("One of the items in your cart is no longer available.");
+    // Stock is re-checked here, not trusted from the client cart — the
+    // stall page's own UI blocks adding more than what's in stock, but
+    // that's a courtesy, not the enforcement boundary.
+    if (product.isDraft || line.quantity > product.stock) {
+      throw new Error(`"${product.name}" doesn't have enough stock left for this order.`);
+    }
 
     const unitPrice = Number(product.priceUsd);
     const lineTotal = unitPrice * line.quantity;
@@ -98,4 +105,11 @@ export async function markOrderFailed(orderId: string, reason: string): Promise<
     .update(orders)
     .set({ status: "failed", failureReason: reason, updatedAt: new Date() })
     .where(eq(orders.id, orderId));
+}
+
+/** Client-callable wrapper around data/orders.ts's server-only DAL —
+ *  buyers have no server session (see createPendingOrder above), so the
+ *  orders page calls this directly with whatever address is connected. */
+export async function getBuyerOrders(buyerAddress: string): Promise<BuyerOrder[]> {
+  return getOrdersByBuyerAddress(buyerAddress);
 }

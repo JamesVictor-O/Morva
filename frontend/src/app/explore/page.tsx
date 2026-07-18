@@ -5,15 +5,21 @@ import { Topbar } from "@/components/layout/topbar";
 import { SearchField } from "@/components/layout/search-field";
 import { BalancePill } from "@/components/checkout/balance-pill";
 import { UserAvatar } from "@/components/auth/user-avatar";
-import { AvatarTile } from "@/components/ui/avatar-tile";
 import { IconButton } from "@/components/ui/icon-button";
 import { Button } from "@/components/ui/button";
+import { MediaImage } from "@/components/ui/media-image";
 import { accentClasses } from "@/components/ui/accent";
-import { COLLECTIONS, getTrendingStalls } from "@/lib/mock-data";
-import type { Collection } from "@/lib/types";
+import { getCatalogProducts } from "@/lib/data/products";
+import { formatUsd } from "@/lib/format";
+import { COLLECTIONS } from "@/lib/mock-data";
+import type { CatalogProduct, Collection } from "@/lib/types";
 
-export default function ExplorePage() {
-  const trending = getTrendingStalls();
+// Product listings change as merchants stock/restock — not known at build
+// time, same reasoning as the stall page.
+export const dynamic = "force-dynamic";
+
+export default async function ExplorePage() {
+  const catalogProducts = await getCatalogProducts();
 
   return (
     <AppShell
@@ -83,27 +89,21 @@ export default function ExplorePage() {
         </div>
 
         <h2 className="mt-10 text-[20px] font-semibold tracking-tight text-ink">
-          Trending stalls
+          Discover products
         </h2>
-        <div className="mt-4 rounded-[26px] border border-border-soft bg-surface-solid px-6">
-          {trending.map((stall, i) => (
-            <Link
-              key={stall.id}
-              href={`/stalls/${stall.slug}`}
-              className={`flex items-center gap-4 py-4 ${i > 0 ? "border-t border-divider" : ""}`}
-            >
-              <span className="w-6 flex-none font-mono text-[13px] text-ink-quiet">
-                {String(i + 1).padStart(2, "0")}
-              </span>
-              <AvatarTile label={stall.initial} accent={stall.accent} size="md" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[16px] font-semibold text-ink">{stall.name}</p>
-                <p className="truncate text-[14px] text-ink-faint">{stall.tagline}</p>
-              </div>
-              <span className="flex-none text-[14px] text-ink-faint">{stall.category}</span>
-            </Link>
+        <p className="mt-1 text-[14px] text-ink-faint">
+          Real listings from every stall in the plaza, mixed together.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-[18px] sm:grid-cols-3 xl:grid-cols-4">
+          {catalogProducts.map((product) => (
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
+        {catalogProducts.length === 0 && (
+          <p className="mt-4 text-[15px] text-ink-faint">
+            Nothing in stock across the plaza yet — check back soon.
+          </p>
+        )}
       </main>
     </AppShell>
   );
@@ -116,5 +116,33 @@ function CollectionCard({ collection }: { collection: Collection }) {
       <p className={`text-[17px] font-semibold ${fg}`}>{collection.title}</p>
       <p className={`mt-6 text-[14px] opacity-70 ${fg}`}>{collection.subtitle}</p>
     </div>
+  );
+}
+
+function ProductCard({ product }: { product: CatalogProduct }) {
+  const { bg } = accentClasses(product.stallAccent);
+  return (
+    <Link
+      href={`/stalls/${product.stallSlug}`}
+      className="flex flex-col overflow-hidden rounded-[22px] border border-border-soft bg-surface-solid transition-shadow hover:shadow-md"
+    >
+      <MediaImage
+        src={product.photoUrl}
+        alt={product.name}
+        sizes="(min-width: 1280px) 25vw, (min-width: 640px) 33vw, 50vw"
+        aspectRatio="1 / 1"
+        className={bg}
+        fallback={
+          <div className={`flex h-full w-full items-center justify-center p-4 ${bg}`}>
+            <div className="h-full w-full rounded-2xl border border-dashed border-ink/15" />
+          </div>
+        }
+      />
+      <div className="flex flex-1 flex-col gap-1.5 p-4">
+        <p className="truncate text-[15px] font-semibold text-ink">{product.name}</p>
+        <p className="truncate text-[13px] text-ink-faint">{product.stallName}</p>
+        <p className="mt-auto text-[17px] font-semibold text-ink">${formatUsd(product.priceUsd)}</p>
+      </div>
+    </Link>
   );
 }

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
+    "@magic-ext/oauth2": "15.10.0",
     "@morva/sdk": "workspace:*",
     "@particle-network/universal-account-sdk": "2.0.3",
     "@supabase/supabase-js": "^2.110.3",

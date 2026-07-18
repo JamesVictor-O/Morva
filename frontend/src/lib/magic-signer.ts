@@ -1,6 +1,6 @@
-import type { Magic } from "magic-sdk";
 import { createWalletClient, custom, type Address, type Hex, type SignedAuthorization } from "viem";
 import type { AuthorizationRequest, MorvaSigner } from "@morva/sdk";
+import type { MorvaMagicInstance } from "./magic";
 
 /**
  * MorvaSigner backed by a Magic embedded wallet. Magic never hands the
@@ -16,7 +16,7 @@ import type { AuthorizationRequest, MorvaSigner } from "@morva/sdk";
  */
 export class MagicSigner implements MorvaSigner {
   constructor(
-    private readonly magic: Magic,
+    private readonly magic: MorvaMagicInstance,
     public readonly address: Address
   ) {}
 

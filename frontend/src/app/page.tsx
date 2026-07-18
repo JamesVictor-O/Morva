@@ -5,6 +5,7 @@ import { CopyChip } from "@/components/sdk/copy-chip";
 import { CodeBlock } from "@/components/sdk/code-block";
 
 const GITHUB_URL = "https://github.com/JamesVictor-O/Morva";
+const NPM_URL = "https://www.npmjs.com/package/@morva/sdk";
 
 const QUICKSTART_CODE = `import { createMorva, LocalSigner } from "@morva/sdk";
 
@@ -103,6 +104,15 @@ export default function SdkPage() {
             Docs
           </Link>
           <a
+            href={NPM_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 text-[14px] text-ink-soft transition-colors hover:text-ink"
+          >
+            npm
+            <ExternalLink size={14} strokeWidth={1.8} />
+          </a>
+          <a
             href={GITHUB_URL}
             target="_blank"
             rel="noreferrer"
@@ -122,9 +132,15 @@ export default function SdkPage() {
       <main className="mx-auto max-w-[1100px] px-5 pb-24 sm:px-8">
         {/* Hero */}
         <section className="pt-10 sm:pt-16">
-          <span className="rounded-full border border-border-strong bg-surface-solid px-3.5 py-1.5 font-mono text-[12px] text-ink-faint">
+          <a
+            href={NPM_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border-strong bg-surface-solid px-3.5 py-1.5 font-mono text-[12px] text-ink-faint transition-colors hover:text-ink"
+          >
             @morva/sdk
-          </span>
+            <ExternalLink size={12} strokeWidth={1.8} />
+          </a>
           <h1 className="mt-6 max-w-[720px] text-[38px] font-semibold leading-[1.08] tracking-tight text-ink sm:text-[52px]">
             Checkout that doesn&apos;t care which chain your buyer is holding funds on.
           </h1>

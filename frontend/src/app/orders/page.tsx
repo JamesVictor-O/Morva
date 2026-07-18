@@ -1,34 +1,66 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { BalancePill } from "@/components/checkout/balance-pill";
 import { UserAvatar } from "@/components/auth/user-avatar";
+import { SignInGate } from "@/components/auth/sign-in-gate";
 import { AvatarTile } from "@/components/ui/avatar-tile";
 import { StatusPill } from "@/components/ui/status-pill";
-import { ORDERS, getStallById } from "@/lib/mock-data";
-import type { Order, OrderStatus } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
+import { getBuyerOrders } from "@/lib/actions/orders";
+import { formatUsd } from "@/lib/format";
+import type { BuyerOrder } from "@/lib/data/orders";
+import type { BuyerOrderStatus } from "@/lib/types";
 
-type Filter = "all" | OrderStatus;
+type Filter = "all" | BuyerOrderStatus;
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: "all", label: "All" },
-  { id: "in-progress", label: "In progress" },
-  { id: "delivered", label: "Delivered" },
+  { id: "settled", label: "Settled" },
+  { id: "pending", label: "Clearing" },
+  { id: "failed", label: "Failed" },
 ];
 
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  "in-progress": "On the way",
-  delivered: "Delivered",
+const STATUS_LABEL: Record<BuyerOrderStatus, string> = {
+  settled: "Settled",
+  pending: "Clearing",
+  failed: "Failed",
 };
 
 export default function OrdersPage() {
+  const { status, user } = useAuth();
   const [filter, setFilter] = useState<Filter>("all");
+  const [orders, setOrders] = useState<BuyerOrder[] | null>(null);
 
-  const matches = (order: Order) => filter === "all" || order.status === filter;
-  const thisWeek = ORDERS.filter((o) => o.period === "this-week" && matches(o));
-  const earlier = ORDERS.filter((o) => o.period === "earlier" && matches(o));
+  useEffect(() => {
+    if (status !== "authenticated" || !user?.publicAddress) return;
+    let cancelled = false;
+    getBuyerOrders(user.publicAddress).then((result) => {
+      if (!cancelled) setOrders(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [status, user?.publicAddress]);
+
+  if (status !== "authenticated") {
+    return <SignInGate title="Sign in to see your orders" body="Your order history is tied to your connected wallet." />;
+  }
+
+  if (orders === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-surface">
+        <Loader2 size={26} strokeWidth={1.8} className="animate-spin text-ink-faint" />
+      </div>
+    );
+  }
+
+  const matches = (order: BuyerOrder) => filter === "all" || order.status === filter;
+  const thisWeek = orders.filter((o) => o.period === "this-week" && matches(o));
+  const earlier = orders.filter((o) => o.period === "earlier" && matches(o));
 
   return (
     <AppShell variant="buyer">
@@ -66,14 +98,16 @@ export default function OrdersPage() {
         <OrderGroup label="Earlier" orders={earlier} />
 
         {thisWeek.length === 0 && earlier.length === 0 && (
-          <p className="mt-10 text-[15px] text-ink-faint">No orders match this filter.</p>
+          <p className="mt-10 text-[15px] text-ink-faint">
+            {orders.length === 0 ? "No orders yet — go find something to buy." : "No orders match this filter."}
+          </p>
         )}
       </main>
     </AppShell>
   );
 }
 
-function OrderGroup({ label, orders }: { label: string; orders: Order[] }) {
+function OrderGroup({ label, orders }: { label: string; orders: BuyerOrder[] }) {
   if (orders.length === 0) return null;
   return (
     <div className="mt-8">
@@ -87,24 +121,32 @@ function OrderGroup({ label, orders }: { label: string; orders: Order[] }) {
   );
 }
 
-function OrderRow({ order, withDivider }: { order: Order; withDivider: boolean }) {
-  const stall = getStallById(order.stallId);
-  if (!stall) return null;
+function OrderRow({ order, withDivider }: { order: BuyerOrder; withDivider: boolean }) {
+  const tone = order.status === "settled" ? "success" : order.status === "failed" ? "error" : "warning";
 
   return (
     <div className={`flex flex-wrap items-center gap-4 py-4 ${withDivider ? "border-t border-divider" : ""}`}>
-      <AvatarTile label={stall.initial} accent={stall.accent} size="lg" />
+      <AvatarTile label={order.stallInitial} accent={order.stallAccent} size="lg" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[16px] font-semibold text-ink">{order.productName}</p>
+        <p className="truncate text-[16px] font-semibold text-ink">{order.itemName}</p>
         <p className="truncate text-[14px] text-ink-faint">
-          {stall.name} · {order.date}
+          {order.stallName} · {order.date}
         </p>
       </div>
-      <StatusPill tone={order.status === "delivered" ? "success" : "warning"}>
-        {STATUS_LABEL[order.status]}
-      </StatusPill>
-      <p className="flex-none text-[16px] font-semibold text-ink">${order.amountUsd.toFixed(2)}</p>
-      <span className="flex-none text-[14px] text-ink-faint">Receipt</span>
+      <StatusPill tone={tone}>{STATUS_LABEL[order.status]}</StatusPill>
+      <p className="flex-none text-[16px] font-semibold text-ink">${formatUsd(order.amountUsd)}</p>
+      {order.explorerUrl ? (
+        <a
+          href={order.explorerUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex-none text-[14px] font-semibold text-ink transition-colors hover:text-primary"
+        >
+          Receipt
+        </a>
+      ) : (
+        <span className="flex-none text-[14px] text-ink-quiet">Receipt</span>
+      )}
     </div>
   );
 }

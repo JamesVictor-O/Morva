@@ -1,5 +1,7 @@
 # @morva/sdk
 
+[![npm version](https://img.shields.io/npm/v/@morva/sdk.svg)](https://www.npmjs.com/package/@morva/sdk)
+
 Headless TypeScript SDK for accepting crypto payments settled to a merchant's
 chosen token, on a merchant's chosen chain, while the buyer pays from a
 unified balance spread across whatever chains they actually hold assets on.

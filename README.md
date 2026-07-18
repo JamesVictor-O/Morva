@@ -1,5 +1,7 @@
 # Morva
 
+[![npm version](https://img.shields.io/npm/v/@morva/sdk.svg)](https://www.npmjs.com/package/@morva/sdk)
+
 **Crypto checkout that feels like Web2.**
 
 A headless TypeScript SDK that lets any merchant accept crypto payments from
@@ -12,7 +14,8 @@ learn something new.
 
 
 
-[SDK package](sdk) · [Docs source](frontend/src/app/docs) ·
+[SDK on npm](https://www.npmjs.com/package/@morva/sdk) · [SDK source](sdk) ·
+[Docs source](frontend/src/app/docs) ·
 [Demo storefront source](frontend/src/app/demo) · [Smart contract](contracts)
 
 > Run `pnpm dev` in `frontend/` and the SDK landing page is at `/`, the full
@@ -197,6 +200,8 @@ touching a real database and a real payment call, not fixtures:
 ---
 
 ## Quickstart
+
+[`@morva/sdk` on npm](https://www.npmjs.com/package/@morva/sdk)
 
 ```bash
 pnpm add @morva/sdk

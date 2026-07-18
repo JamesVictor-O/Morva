@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import { AvatarTile } from "@/components/ui/avatar-tile";
+import { MediaImage } from "@/components/ui/media-image";
 import { accentClasses } from "@/components/ui/accent";
 import { MerchantSessionGate } from "@/components/auth/merchant-session-gate";
 import { getMerchantSession } from "@/lib/auth/session";
@@ -37,9 +38,17 @@ export default async function MerchantDashboardPage() {
 
       <main className="grid grid-cols-1 gap-6 px-5 py-8 sm:px-8 lg:grid-cols-2 lg:px-[34px] lg:py-10">
         <div className="overflow-hidden rounded-[28px] border border-border-soft bg-surface-solid">
-          <div className={`flex h-[170px] p-[26px] ${bg}`}>
-            <div className="flex-1 rounded-[18px] border border-dashed border-ink/15 bg-surface-solid/60 font-mono text-[12px] text-ink/40" />
-          </div>
+          <MediaImage
+            src={stall.photoUrl ?? undefined}
+            alt={stall.name}
+            sizes="(min-width: 1024px) 50vw, 100vw"
+            className={`h-[170px] w-full ${bg}`}
+            fallback={
+              <div className={`flex h-full p-[26px] ${bg}`}>
+                <div className="flex-1 rounded-[18px] border border-dashed border-ink/15 bg-surface-solid/60 font-mono text-[12px] text-ink/40" />
+              </div>
+            }
+          />
           <div className="flex items-center gap-[14px] p-[22px]">
             <AvatarTile label={stall.initial} accent={accent} size="xl" />
             <div className="min-w-0 flex-1">

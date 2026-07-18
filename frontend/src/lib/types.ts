@@ -32,6 +32,21 @@ export interface Product {
   priceUsd: number;
   /** Same vendor-upload caveats as Stall.photoUrl. */
   photoUrl?: string;
+  stock: number;
+}
+
+/** A product as it appears in a cross-vendor browse feed (Explore) —
+ *  carries just enough stall context to attribute and link to it, without
+ *  the full Stall shape a stall page itself needs. */
+export interface CatalogProduct {
+  id: string;
+  name: string;
+  meta: string;
+  priceUsd: number;
+  photoUrl?: string;
+  stallSlug: string;
+  stallName: string;
+  stallAccent: Accent;
 }
 
 export interface ChainHolding {
@@ -85,18 +100,11 @@ export interface MerchantProduct {
   status: MerchantProductStatus;
 }
 
-export type OrderStatus = "in-progress" | "delivered";
-export type OrderPeriod = "this-week" | "earlier";
-
-export interface Order {
-  id: string;
-  stallId: string;
-  productName: string;
-  date: string;
-  status: OrderStatus;
-  period: OrderPeriod;
-  amountUsd: number;
-}
+/** A crypto payment settles or it doesn't — there's no shipping-tracked
+ *  "in progress" state once the on-chain transfer itself is what fulfills
+ *  the order, so this mirrors orders.status in db/schema.ts directly
+ *  rather than the delivery-tracking vocabulary an ecommerce mock once used. */
+export type BuyerOrderStatus = "pending" | "settled" | "failed";
 
 export type CategoryIcon = "home" | "sprout" | "coffee" | "shopping-bag" | "book-open" | "star";
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 import { H1, Lead, H2, P, UL, LI, InlineCode } from "@/components/docs/prose";
 import { CodeBlock } from "@/components/sdk/code-block";
 
@@ -110,6 +110,15 @@ const result = await session.pay(intent, { onStatus: console.log });`}
         >
           How the infrastructure works
         </Link>
+        <a
+          href="https://www.npmjs.com/package/@morva/sdk"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 rounded-full border border-border px-6 py-3 text-[14px] font-semibold text-ink transition-colors hover:bg-fill"
+        >
+          View on npm
+          <ExternalLink size={14} strokeWidth={1.8} />
+        </a>
       </div>
     </div>
   );

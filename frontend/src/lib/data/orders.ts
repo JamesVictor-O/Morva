@@ -1,9 +1,9 @@
 import "server-only";
 import { and, desc, eq, gte, or } from "drizzle-orm";
 import { db } from "../db/client";
-import { orderLines, orders } from "../db/schema";
+import { orderLines, orders, stalls } from "../db/schema";
 import { getMyStall } from "./stalls";
-import type { Accent, PaymentStatus } from "../types";
+import type { Accent, BuyerOrderStatus, PaymentStatus } from "../types";
 
 export interface MerchantPayment {
   id: string;
@@ -64,6 +64,64 @@ export async function getMyPayments(statusFilter?: "settled" | "pending"): Promi
     });
   }
   return payments;
+}
+
+export interface BuyerOrder {
+  id: string;
+  orderNumber: string;
+  stallSlug: string;
+  stallName: string;
+  stallInitial: string;
+  stallAccent: Accent;
+  itemName: string;
+  status: BuyerOrderStatus;
+  amountUsd: number;
+  date: string;
+  period: "this-week" | "earlier";
+  explorerUrl?: string;
+}
+
+/** Buyer-facing — scoped to whatever address the caller passes, not a
+ *  server session. Buyers are never SIWE-verified (see createPendingOrder);
+ *  a client-supplied address here only ever reveals that address's own
+ *  order history, which is no more sensitive than what's already visible
+ *  on-chain for any address. */
+export async function getOrdersByBuyerAddress(buyerAddress: string): Promise<BuyerOrder[]> {
+  const rows = await db
+    .select({ order: orders, stall: stalls })
+    .from(orders)
+    .innerJoin(stalls, eq(orders.stallId, stalls.id))
+    .where(eq(orders.buyerAddress, buyerAddress))
+    .orderBy(desc(orders.createdAt));
+
+  const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+  const result: BuyerOrder[] = [];
+  for (const { order, stall } of rows) {
+    const lines = await db.select().from(orderLines).where(eq(orderLines.orderId, order.id));
+    const itemName =
+      lines.length === 1
+        ? lines[0].quantity > 1
+          ? `${lines[0].productNameSnapshot} ×${lines[0].quantity}`
+          : lines[0].productNameSnapshot
+        : `${lines.length} items`;
+
+    result.push({
+      id: order.id,
+      orderNumber: order.orderNumber,
+      stallSlug: stall.slug,
+      stallName: stall.name,
+      stallInitial: stall.initial,
+      stallAccent: stall.accent as Accent,
+      itemName,
+      status: order.status,
+      amountUsd: Number(order.totalUsd),
+      date: order.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      period: order.createdAt.getTime() >= weekAgo ? "this-week" : "earlier",
+      explorerUrl: order.explorerUrl ?? undefined,
+    });
+  }
+  return result;
 }
 
 export async function getWeeklyStats(): Promise<{ weekUsd: number; salesThisWeek: number }> {

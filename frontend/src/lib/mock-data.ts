@@ -2,7 +2,6 @@ import type {
   Category,
   Collection,
   MerchantProduct,
-  Order,
   Payment,
   Product,
   Stall,
@@ -119,36 +118,38 @@ export const STALLS: Stall[] = [
   },
 ];
 
+// stock: 50 on every entry — seed.ts hardcodes the same value regardless,
+// this is just here to satisfy Product's shape.
 export const PRODUCTS: Product[] = [
-  { id: "plate", stallId: "kinfolk", name: "Speckled dinner plate", meta: "10.5\" · stoneware", priceUsd: 36, photoUrl: "/product-photos/kinfolk-plate-stack.jpg" },
-  { id: "mug", stallId: "kinfolk", name: "Stoneware mug", meta: "12oz · matte glaze", priceUsd: 24, photoUrl: "/product-photos/kinfolk-mug-shelf.jpg" },
-  { id: "bowl", stallId: "kinfolk", name: "Serving bowl", meta: "9\" · reactive green", priceUsd: 52, photoUrl: "/product-photos/kinfolk-bowl-cabbage-leaf.jpg" },
-  { id: "pour-over", stallId: "kinfolk", name: "Pour-over set", meta: "dripper + carafe", priceUsd: 68 },
+  { id: "plate", stallId: "kinfolk", name: "Speckled dinner plate", meta: "10.5\" · stoneware", priceUsd: 36, photoUrl: "/product-photos/kinfolk-plate-stack.jpg", stock: 50 },
+  { id: "mug", stallId: "kinfolk", name: "Stoneware mug", meta: "12oz · matte glaze", priceUsd: 24, photoUrl: "/product-photos/kinfolk-mug-shelf.jpg", stock: 50 },
+  { id: "bowl", stallId: "kinfolk", name: "Serving bowl", meta: "9\" · reactive green", priceUsd: 52, photoUrl: "/product-photos/kinfolk-bowl-cabbage-leaf.jpg", stock: 50 },
+  { id: "pour-over", stallId: "kinfolk", name: "Pour-over set", meta: "dripper + carafe", priceUsd: 68, stock: 50 },
 
-  { id: "monstera", stallId: "verde", name: "Monstera deliciosa", meta: "6\" nursery pot", priceUsd: 42 },
-  { id: "pothos", stallId: "verde", name: "Golden pothos", meta: "4\" nursery pot", priceUsd: 18 },
-  { id: "terracotta", stallId: "verde", name: "Terracotta planter", meta: "8\" · drainage hole", priceUsd: 26 },
+  { id: "monstera", stallId: "verde", name: "Monstera deliciosa", meta: "6\" nursery pot", priceUsd: 42, stock: 50 },
+  { id: "pothos", stallId: "verde", name: "Golden pothos", meta: "4\" nursery pot", priceUsd: 18, stock: 50 },
+  { id: "terracotta", stallId: "verde", name: "Terracotta planter", meta: "8\" · drainage hole", priceUsd: 26, stock: 50 },
 
-  { id: "sourdough", stallId: "golden-hour", name: "Sourdough loaf", meta: "baked to order", priceUsd: 12 },
-  { id: "croissant-box", stallId: "golden-hour", name: "Croissant box", meta: "box of 6", priceUsd: 28 },
-  { id: "jam", stallId: "golden-hour", name: "Strawberry jam", meta: "8oz jar", priceUsd: 9 },
+  { id: "sourdough", stallId: "golden-hour", name: "Sourdough loaf", meta: "baked to order", priceUsd: 12, stock: 50 },
+  { id: "croissant-box", stallId: "golden-hour", name: "Croissant box", meta: "box of 6", priceUsd: 28, stock: 50 },
+  { id: "jam", stallId: "golden-hour", name: "Strawberry jam", meta: "8oz jar", priceUsd: 9, stock: 50 },
 
-  { id: "weekender", stallId: "rue", name: "Leather weekender", meta: "full-grain, brass hardware", priceUsd: 180 },
-  { id: "wallet", stallId: "rue", name: "Bifold wallet", meta: "vegetable-tanned", priceUsd: 58 },
-  { id: "belt", stallId: "rue", name: "Everyday belt", meta: "1.25\" · brass buckle", priceUsd: 46 },
-  { id: "canvas-tote", stallId: "rue", name: "Canvas tote", meta: "waxed canvas · leather trim", priceUsd: 74, photoUrl: "/product-photos/rue-tote-bags.jpg" },
+  { id: "weekender", stallId: "rue", name: "Leather weekender", meta: "full-grain, brass hardware", priceUsd: 180, stock: 50 },
+  { id: "wallet", stallId: "rue", name: "Bifold wallet", meta: "vegetable-tanned", priceUsd: 58, stock: 50 },
+  { id: "belt", stallId: "rue", name: "Everyday belt", meta: "1.25\" · brass buckle", priceUsd: 46, stock: 50 },
+  { id: "canvas-tote", stallId: "rue", name: "Canvas tote", meta: "waxed canvas · leather trim", priceUsd: 74, photoUrl: "/product-photos/rue-tote-bags.jpg", stock: 50 },
 
-  { id: "sneaker-vans", stallId: "sole", name: "Classic low-top sneaker", meta: "canvas · vulcanized sole", priceUsd: 68, photoUrl: "/product-photos/sole-sneaker-vans.jpg" },
-  { id: "sneaker-court", stallId: "sole", name: "Court sneaker", meta: "leather · rubber cupsole", priceUsd: 92, photoUrl: "/product-photos/sole-sneaker-nike.jpg" },
-  { id: "ankle-boot", stallId: "sole", name: "Croc-embossed ankle boot", meta: "leather · block heel", priceUsd: 148, photoUrl: "/product-photos/sole-boot.jpg" },
-  { id: "suede-loafer", stallId: "sole", name: "Suede loafer", meta: "suede · leather sole", priceUsd: 118, photoUrl: "/product-photos/sole-loafer.jpg" },
-  { id: "crossbody-bag", stallId: "sole", name: "Quilted crossbody bag", meta: "vegan leather · chain strap", priceUsd: 54, photoUrl: "/product-photos/sole-crossbody-bag.jpg" },
+  { id: "sneaker-vans", stallId: "sole", name: "Classic low-top sneaker", meta: "canvas · vulcanized sole", priceUsd: 68, photoUrl: "/product-photos/sole-sneaker-vans.jpg", stock: 50 },
+  { id: "sneaker-court", stallId: "sole", name: "Court sneaker", meta: "leather · rubber cupsole", priceUsd: 92, photoUrl: "/product-photos/sole-sneaker-nike.jpg", stock: 50 },
+  { id: "ankle-boot", stallId: "sole", name: "Croc-embossed ankle boot", meta: "leather · block heel", priceUsd: 148, photoUrl: "/product-photos/sole-boot.jpg", stock: 50 },
+  { id: "suede-loafer", stallId: "sole", name: "Suede loafer", meta: "suede · leather sole", priceUsd: 118, photoUrl: "/product-photos/sole-loafer.jpg", stock: 50 },
+  { id: "crossbody-bag", stallId: "sole", name: "Quilted crossbody bag", meta: "vegan leather · chain strap", priceUsd: 54, photoUrl: "/product-photos/sole-crossbody-bag.jpg", stock: 50 },
 
-  { id: "poetry", stallId: "nook", name: "Poetry, Selected", meta: "first press · signed", priceUsd: 22 },
-  { id: "notebook", stallId: "nook", name: "Field notebook", meta: "dot grid · 96pg", priceUsd: 14 },
+  { id: "poetry", stallId: "nook", name: "Poetry, Selected", meta: "first press · signed", priceUsd: 22, stock: 50 },
+  { id: "notebook", stallId: "nook", name: "Field notebook", meta: "dot grid · 96pg", priceUsd: 14, stock: 50 },
 
-  { id: "single-origin", stallId: "field-notes", name: "Single-origin bag", meta: "12oz · whole bean", priceUsd: 19 },
-  { id: "cold-brew", stallId: "field-notes", name: "Cold brew concentrate", meta: "32oz bottle", priceUsd: 16 },
+  { id: "single-origin", stallId: "field-notes", name: "Single-origin bag", meta: "12oz · whole bean", priceUsd: 19, stock: 50 },
+  { id: "cold-brew", stallId: "field-notes", name: "Cold brew concentrate", meta: "32oz bottle", priceUsd: 16, stock: 50 },
 ];
 
 export const UNIFIED_BALANCE: UnifiedBalance = {
@@ -245,10 +246,6 @@ export function getStallBySlug(slug: string): Stall | undefined {
   return STALLS.find((stall) => stall.slug === slug);
 }
 
-export function getStallById(id: string): Stall | undefined {
-  return STALLS.find((stall) => stall.id === id);
-}
-
 export function getProductsByStallId(stallId: string): Product[] {
   return PRODUCTS.filter((product) => product.stallId === stallId);
 }
@@ -281,12 +278,4 @@ export const CATEGORIES: Category[] = [
   { id: "goods-carry", title: "Goods & carry", subtitle: "26 stalls", accent: "peach", icon: "shopping-bag" },
   { id: "reading", title: "Reading", subtitle: "15 stalls", accent: "beige", icon: "book-open" },
   { id: "art-prints", title: "Art & prints", subtitle: "22 stalls", accent: "green", icon: "star" },
-];
-
-export const ORDERS: Order[] = [
-  { id: "o1", stallId: "kinfolk", productName: "Speckled dinner plate", date: "Jul 2", status: "in-progress", period: "this-week", amountUsd: 36 },
-  { id: "o2", stallId: "field-notes", productName: "Ethiopia Guji · 2 bags", date: "Jul 1", status: "delivered", period: "this-week", amountUsd: 32 },
-  { id: "o3", stallId: "rue", productName: "Waxed canvas tote", date: "Jun 24", status: "delivered", period: "earlier", amountUsd: 58 },
-  { id: "o4", stallId: "golden-hour", productName: "Sourdough + jam bundle", date: "Jun 20", status: "delivered", period: "earlier", amountUsd: 21 },
-  { id: "o5", stallId: "nook", productName: "The Overstory — paperback", date: "Jun 15", status: "delivered", period: "earlier", amountUsd: 18 },
 ];
