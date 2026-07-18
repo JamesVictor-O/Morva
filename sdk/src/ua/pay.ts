@@ -1,5 +1,16 @@
-import { createPublicClient, erc20Abi, hexToBytes, http, parseUnits, type Hex, type PublicClient } from "viem";
-import { UA_TRANSACTION_STATUS, type UniversalAccount } from "@particle-network/universal-account-sdk";
+import {
+  createPublicClient,
+  encodeFunctionData,
+  erc20Abi,
+  hexToBytes,
+  http,
+  parseUnits,
+  toHex,
+  zeroAddress,
+  type Hex,
+  type PublicClient,
+} from "viem";
+import { getSupportedToken, UA_TRANSACTION_STATUS, type UniversalAccount } from "@particle-network/universal-account-sdk";
 import {
   DEFAULT_SETTLEMENT_TIMEOUT_MS,
   getDefaultSettlementRpcUrl,
@@ -115,14 +126,7 @@ export async function pay(
 
   let transaction: Awaited<ReturnType<UniversalAccount["createTransferTransaction"]>>;
   try {
-    transaction = await ua.createTransferTransaction({
-      // Particle's CHAIN_ID enum values match real EVM chain ids 1:1 for
-      // every chain this SDK supports settling to (see config.ts) — no
-      // separate mapping needed.
-      token: { chainId: intent.settlementChainId, address: intent.settlementToken },
-      amount: intent.amount,
-      receiver: intent.settlementRecipient,
-    });
+    transaction = await buildTransferTransaction(ua, intent);
   } catch (err) {
     onStatus("failed");
     // Particle's own routing engine rejects some transfers as
@@ -175,6 +179,72 @@ export async function pay(
   await finalizeSettlement(ua, transactionId, intent, opts, onStatus, onDebug, baseline);
 
   return { transactionId, explorerUrl: buildExplorerUrl(transactionId) };
+}
+
+/**
+ * Builds the actual transfer. This deliberately does NOT always call
+ * ua.createTransferTransaction() — that method (internally tagged
+ * "transfer_v2") was confirmed via direct, repeated live testing to
+ * reject payments needing meaningful cross-chain sourcing as
+ * "Insufficient primary token balance" (code -32653), even against a
+ * wallet with genuinely sufficient funds spread across chains — e.g. a
+ * buyer holding $0.94 on the settlement chain and $0.80 on another chain
+ * could not complete a $1.20 payment, no matter how much of that $0.80
+ * should have been routable.
+ *
+ * Particle's own reference implementation
+ * (github.com/Particle-Network/universal-accounts-7702, TransferCard.tsx)
+ * does not use createTransferTransaction for this "pay an address on a
+ * specific chain from cross-chain balance" case either — it uses
+ * createUniversalTransaction() with an explicit expectTokens requirement
+ * plus a raw ERC-20 transfer() call. Re-running the exact same amounts
+ * that failed above through createUniversalTransaction instead succeeded
+ * for every one of them, still via the same real Particle backend.
+ *
+ * expectTokens only accepts Particle's small closed set of "primary"
+ * token types (ETH/USDT/USDC/BNB/SOL) — getSupportedToken(chainId,
+ * address), also public on the SDK, is what tells us whether
+ * intent.settlementToken is one of them. For a settlement token outside
+ * that set (an exotic ERC-20 with no primary-asset routing, e.g. an
+ * NFT-drop token), createUniversalTransaction's expectTokens literally
+ * cannot express the request, so this falls back to
+ * createTransferTransaction — same as before, and still correct for
+ * amounts the settlement chain already holds without needing real
+ * cross-chain sourcing.
+ */
+async function buildTransferTransaction(
+  ua: UniversalAccount,
+  intent: PaymentIntent
+): Promise<Awaited<ReturnType<UniversalAccount["createTransferTransaction"]>>> {
+  const supportedToken = getSupportedToken(intent.settlementChainId, intent.settlementToken);
+
+  if (!supportedToken?.type) {
+    return ua.createTransferTransaction({
+      token: { chainId: intent.settlementChainId, address: intent.settlementToken },
+      amount: intent.amount,
+      receiver: intent.settlementRecipient,
+    });
+  }
+
+  const amountBaseUnits = parseUnits(intent.amount, supportedToken.realDecimals);
+  const isNativeToken = intent.settlementToken.toLowerCase() === zeroAddress;
+
+  return ua.createUniversalTransaction({
+    chainId: intent.settlementChainId,
+    expectTokens: [{ type: supportedToken.type, amount: intent.amount }],
+    transactions: [
+      isNativeToken
+        ? { to: intent.settlementRecipient, value: toHex(amountBaseUnits), data: "0x" }
+        : {
+            to: intent.settlementToken,
+            data: encodeFunctionData({
+              abi: erc20Abi,
+              functionName: "transfer",
+              args: [intent.settlementRecipient, amountBaseUnits],
+            }),
+          },
+    ],
+  });
 }
 
 /** Waits for settlement and translates the outcome into the right

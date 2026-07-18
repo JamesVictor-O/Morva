@@ -82,9 +82,14 @@ export default function InfrastructurePage() {
             "Reads the buyer's real balance across every supported chain, mapped into a per-asset, per-chain breakdown.",
           ],
           [
-            <code key="2" className="font-mono text-[13px]">createTransferTransaction()</code>,
+            <code key="2" className="font-mono text-[13px]">createUniversalTransaction()</code>,
             "ua/pay.ts",
-            "Builds the actual cross-chain transfer — destination token, chain, and receiver, all merchant-configured via the intent (Arbitrum One is only the default) — sourcing liquidity from wherever the buyer's balance lives.",
+            "Builds the actual cross-chain transfer for any settlement token Particle recognizes as a primary asset (USDC, USDT, ETH, ...) — destination token, chain, and receiver, all merchant-configured via the intent (Arbitrum One is only the default). See the callout below for why this call, not createTransferTransaction, is what actually sources liquidity cross-chain correctly.",
+          ],
+          [
+            <code key="2b" className="font-mono text-[13px]">createTransferTransaction()</code>,
+            "ua/pay.ts",
+            "Fallback used only when the settlement token isn't one of Particle's recognized primary assets (an exotic ERC-20 with no cross-chain routing, e.g. an NFT-drop token) — correct for amounts the settlement chain already holds, not for amounts needing real cross-chain sourcing.",
           ],
           [
             <code key="3" className="font-mono text-[13px]">sendTransaction()</code>,
@@ -98,6 +103,49 @@ export default function InfrastructurePage() {
           ],
         ]}
       />
+      <Callout title="Why createUniversalTransaction, not the more obviously-named createTransferTransaction">
+        <P>
+          Particle&apos;s SDK exposes both. <InlineCode>createTransferTransaction()</InlineCode>{" "}
+          (internally tagged <InlineCode>transfer_v2</InlineCode>) is the
+          obvious choice for &quot;send this amount to this address&quot; —
+          it was the first thing this SDK used, and it&apos;s what the
+          examples in Particle&apos;s own docs show. Direct, repeated live
+          testing found it rejects payments that need real cross-chain
+          sourcing as <InlineCode>&quot;Insufficient primary token
+          balance&quot;</InlineCode> (code <InlineCode>-32653</InlineCode>),
+          even against a wallet with genuinely sufficient funds spread
+          across chains — a buyer holding $0.94 on the settlement chain and
+          $0.80 on another chain could not complete a $1.20 payment, no
+          matter how much of that $0.80 should have been routable.
+        </P>
+        <P>
+          Particle&apos;s own reference app for this exact pattern —{" "}
+          <a
+            href="https://github.com/Particle-Network/universal-accounts-7702"
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-ink underline underline-offset-2"
+          >
+            universal-accounts-7702
+          </a>
+          , specifically its <InlineCode>TransferCard.tsx</InlineCode> —
+          doesn&apos;t use <InlineCode>createTransferTransaction()</InlineCode> either.
+          It uses <InlineCode>createUniversalTransaction()</InlineCode> with
+          an explicit <InlineCode>expectTokens</InlineCode> requirement plus
+          a raw ERC-20 <InlineCode>transfer()</InlineCode> call. Re-running
+          the exact amounts that failed above through{" "}
+          <InlineCode>createUniversalTransaction()</InlineCode> instead
+          succeeded for every one of them, against the same real backend.
+          <InlineCode>expectTokens</InlineCode> only accepts Particle&apos;s
+          small closed set of primary token types (ETH/USDT/USDC/BNB/SOL),
+          so <InlineCode>ua/pay.ts</InlineCode> uses{" "}
+          <InlineCode>getSupportedToken()</InlineCode> — also exported
+          publicly from their SDK — to check whether{" "}
+          <InlineCode>intent.settlementToken</InlineCode> is one of them,
+          and only falls back to <InlineCode>createTransferTransaction()</InlineCode>{" "}
+          when it isn&apos;t.
+        </P>
+      </Callout>
       <Callout title="Settlement detection has an intentional fallback">
         <P>
           <InlineCode>getTransaction()</InlineCode>&apos;s response is
@@ -193,9 +241,10 @@ export default function InfrastructurePage() {
         the <em>default</em> when a caller doesn&apos;t specify one, not the
         only option: <InlineCode>ua/pay.ts</InlineCode> passes{" "}
         <InlineCode>intent.settlementChainId</InlineCode> straight through
-        to <InlineCode>createTransferTransaction()</InlineCode>. A merchant
-        chooses both <em>which token</em> and <em>which chain</em> they
-        settle to.
+        to whichever of <InlineCode>createUniversalTransaction()</InlineCode>{" "}
+        / <InlineCode>createTransferTransaction()</InlineCode> ends up
+        building the transfer (see the callout above). A merchant chooses
+        both <em>which token</em> and <em>which chain</em> they settle to.
       </P>
       <P>
         Morva Plaza, this repo&apos;s reference storefront, settles every

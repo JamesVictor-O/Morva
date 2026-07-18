@@ -77,6 +77,10 @@ function mockUa(overrides: Partial<UniversalAccount> = {}): UniversalAccount {
   return {
     getPrimaryAssets: vi.fn().mockResolvedValue({ assets: [], totalAmountInUSD: 100 }),
     createTransferTransaction: vi.fn().mockResolvedValue(transaction()),
+    // Only reached for a settlementToken getSupportedToken() recognizes as
+    // a Particle primary asset (e.g. real USDC addresses) — see
+    // buildTransferTransaction in src/ua/pay.ts for why.
+    createUniversalTransaction: vi.fn().mockResolvedValue(transaction()),
     sendTransaction: vi.fn().mockResolvedValue({ transactionId: "tx-1" }),
     getTransaction: vi.fn().mockResolvedValue({ status: UA_TRANSACTION_STATUS.FINISHED }),
     ...overrides,
@@ -167,10 +171,52 @@ describe("pay", () => {
     );
 
     expect(result.transactionId).toBe("tx-1");
-    expect(ua.createTransferTransaction).toHaveBeenCalledWith({
-      token: { chainId: 8453, address: BASE_USDC },
-      amount: "10.00",
-      receiver: RECIPIENT,
+    // Base USDC is a Particle-recognized primary token, so this goes
+    // through createUniversalTransaction (see the next describe block) —
+    // not createTransferTransaction.
+    expect(ua.createUniversalTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ chainId: 8453, expectTokens: [{ type: "usdc", amount: "10.00" }] })
+    );
+  });
+
+  describe("transaction construction — createUniversalTransaction vs createTransferTransaction", () => {
+    it("uses createUniversalTransaction for a settlement token Particle recognizes as a primary asset (e.g. real USDC)", async () => {
+      // createTransferTransaction ("transfer_v2") was confirmed via live
+      // testing to reject payments needing real cross-chain sourcing as
+      // "Insufficient primary token balance" even against a genuinely
+      // sufficient balance — createUniversalTransaction does not. See
+      // buildTransferTransaction's doc comment in src/ua/pay.ts.
+      const ua = mockUa();
+      const onStatus = vi.fn();
+
+      await pay(ua, mockSigner(), paymentIntent({ amount: "10.00", settlementToken: USDC }), { onStatus });
+
+      expect(ua.createTransferTransaction).not.toHaveBeenCalled();
+      expect(ua.createUniversalTransaction).toHaveBeenCalledTimes(1);
+      const call = vi.mocked(ua.createUniversalTransaction).mock.calls[0][0];
+      expect(call.chainId).toBe(42161);
+      expect(call.expectTokens).toEqual([{ type: "usdc", amount: "10.00" }]);
+      expect(call.transactions).toHaveLength(1);
+      expect((call.transactions[0] as { to: string }).to.toLowerCase()).toBe(USDC.toLowerCase());
+      // ERC-20 transfer(address,uint256) selector, encoding RECIPIENT + the
+      // amount in USDC's real 6 decimals (10_000_000n), not raw "10.00".
+      const data = (call.transactions[0] as { data: string }).data;
+      expect(data.slice(0, 10)).toBe("0xa9059cbb");
+      expect(data.toLowerCase()).toContain(RECIPIENT.slice(2).toLowerCase());
+    });
+
+    it("falls back to createTransferTransaction for a settlement token Particle doesn't recognize", async () => {
+      const ua = mockUa();
+      const onStatus = vi.fn();
+
+      await pay(ua, mockSigner(), paymentIntent({ amount: "10.00", settlementToken: TOKEN }), { onStatus });
+
+      expect(ua.createUniversalTransaction).not.toHaveBeenCalled();
+      expect(ua.createTransferTransaction).toHaveBeenCalledWith({
+        token: { chainId: 42161, address: TOKEN },
+        amount: "10.00",
+        receiver: RECIPIENT,
+      });
     });
   });
 
