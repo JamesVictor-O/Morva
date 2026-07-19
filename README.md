@@ -82,42 +82,101 @@ word for. Every row links to the real implementation.
 
 ### Particle Network — Universal Accounts, EIP-7702 mode
 
-The chain-abstraction engine. Reads a buyer's balance across every chain a
-Universal Account supports and routes liquidity to the destination chain/
-token as part of one signed request.
+"Particle handles it" doesn't survive one follow-up question, so here's
+the actual machinery, bottom to top — using a real payment we ran during
+development as the running example: **$1.20, sourced as 0.94 USDC already
+on Arbitrum (the settlement chain) + 0.80 USDC on Base.**
 
-We use it **exclusively in EIP-7702 mode**, not Particle's ERC-4337 default
-(a separate counterfactual smart-account address). EIP-7702 upgrades the
-buyer's *own* EOA in place — same address, no new address to fund, no
-migration step:
+Before any of the below: the buyer's cross-chain balance itself comes from
+one call — [`sdk/src/ua/balance.ts#L24-L45`](sdk/src/ua/balance.ts#L24-L45) —
+mapping `getPrimaryAssets()` into the per-asset, per-chain breakdown
+everything else here is built on.
 
-- **Account construction, forced EIP-7702** —
-  [`sdk/src/ua/account.ts`](sdk/src/ua/account.ts#L15-L39) — `useEIP7702: true`
-  is not a config option here, it's the only path.
-- **EIP-7702 authorization signing** —
-  [`sdk/src/ua/authorization.ts`](sdk/src/ua/authorization.ts#L15-L55) —
-  signs and serializes the delegation authorization each userOp needs,
-  deduped per chain+nonce (an authorization nonce is scoped per chain, so
-  two chains can legitimately share nonce `0`).
-- **Cross-chain unified balance** —
-  [`sdk/src/ua/balance.ts`](sdk/src/ua/balance.ts#L24-L45) — maps
-  `getPrimaryAssets()` into a per-asset, per-chain breakdown.
-- **The payment execution + settlement detection** —
-  [`sdk/src/ua/pay.ts`](sdk/src/ua/pay.ts#L46-L118) — builds the transfer
-  against the intent's `settlementChainId` (any of
-  `SUPPORTED_SETTLEMENT_CHAIN_IDS`, Arbitrum One by default — see
-  [`sdk/src/config.ts`](sdk/src/config.ts#L13)), submits it, and confirms
-  settlement. Particle's own `getTransaction()` response is untyped
-  (`Promise<any>`) in the pinned SDK version, so settlement detection has a
-  real fallback: if Particle's status signal doesn't resolve, it polls the
-  settlement token's on-chain balance at the recipient directly via viem,
-  against a public client built for that same settlement chain — see
-  [L156–197](sdk/src/ua/pay.ts#L156-L197).
-- **Pinned dependency, deliberately** —
-  [`sdk/src/ua/account.ts#L5-L10`](sdk/src/ua/account.ts#L5-L10) explains
-  why: Universal Accounts was mid-migration to a V2 API surface at build
-  time, so every type used here was read off that exact version's
-  declarations, not the public docs.
+**Layer 1 — the account: why one signature can act on two chains.** In
+EIP-7702 mode, the buyer's own EOA gets delegated smart-account code —
+Universal Accounts are ERC-4337 smart-account implementations attached to
+a pre-existing EOA, and 7702 lets that attachment happen *at the same
+address* instead of deploying a separate contract. That's what makes this
+checkout-viable: the buyer's existing address becomes programmable in
+place, not replaced by a new one they'd have to fund.
+- Forced EIP-7702, not Particle's ERC-4337 default —
+  [`sdk/src/ua/account.ts#L12-L25`](sdk/src/ua/account.ts#L12-L25) —
+  `useEIP7702: true` isn't a config option here, it's the only path.
+
+Because the account is programmable, it executes **UserOperations** —
+signed instruction bundles — instead of raw transactions. When our SDK
+calls `createUniversalTransaction`, Particle plans a set of userops, one
+per chain involved (a Base-side op releasing funds, an Arbitrum-side op
+executing the actual ERC-20 transfer), and hands back a single root hash
+covering all of them.
+- The one signature over that root —
+  [`sdk/src/ua/pay.ts#L151-L155`](sdk/src/ua/pay.ts#L151-L155) — the
+  buyer signs `transaction.rootHash` exactly once; that one signature
+  authorizes every userop underneath it.
+- The 7702 delegation authorizations — a *separate* signed object from
+  the payment signature above —
+  [`sdk/src/ua/authorization.ts#L15-L45`](sdk/src/ua/authorization.ts#L15-L45)
+  — one per chain that still needs its delegation activated, deduped by
+  chain+nonce (an authorization nonce is scoped per chain, so two chains
+  can legitimately share nonce `0`).
+
+**Layer 2 — the movement: no bridge, an atomic swap with a counterparty.**
+Nothing the buyer holds ever crosses a bridge. Instead, a decentralized
+network of liquidity providers already holds inventory on every chain
+Particle supports. The buyer's Base USDC goes to an LP on Base; that same
+LP network releases the equivalent amount from inventory it already holds
+on Arbitrum. Two local transfers, economically linked by the LP's own fee
+— nothing physically travels between chains. This is exactly why sub-$1
+test payments failed outright during development: an LP filling a
+$0.10 leg earns less than the leg costs to facilitate. It's also why the
+settlement token has to be one of Particle's recognized "primary assets"
+(USDC/USDT/ETH/BNB/SOL) — the LP network only makes markets in tokens it
+can safely hold and rebalance.
+- Where our code actually hands Particle this problem —
+  [`sdk/src/ua/pay.ts#L215-L248`](sdk/src/ua/pay.ts#L215-L248) —
+  `buildTransferTransaction()` calls `createUniversalTransaction()` with
+  an explicit `expectTokens` requirement whenever the settlement token is
+  one Particle recognizes as primary (checked via its own exported
+  `getSupportedToken()`) — falling back to the simpler
+  `createTransferTransaction()` only for a token *outside* that
+  recognized set, where cross-chain sourcing isn't available at all (see
+  the doc comment at that link for why we don't always use the more
+  obviously-named method — this exact distinction was a real, live bug we
+  found and fixed).
+
+**Layer 3 — the coordinator: who makes it atomic-ish.** Something has to
+sequence "funds locked on Base" before "LP releases on Arbitrum" before
+"the merchant transfer executes," and handle a leg failing. That's
+Particle's own coordination layer — bundler nodes land each userop on its
+chain, and execution is optimistic with a refund path if a leg dies.
+- Where our code recognizes that refund path —
+  [`sdk/src/ua/pay.ts#L80-L85`](sdk/src/ua/pay.ts#L80-L85) (the status
+  codes) and [`#L405-L414`](sdk/src/ua/pay.ts#L405-L414) (checked against
+  a live transaction) — `REFUND_FINISHED` specifically means a
+  cross-chain leg died and the buyer's source funds came back. Our error
+  handling has been modeling this architecture the whole time, not
+  guessing at it.
+
+**Layer 4 — gas: why the buyer never needed ETH anywhere.** A paymaster
+fronts native gas on whichever chain needs it and recoups the cost from
+the buyer's own primary assets — visible as `gasFeeTokenAmountInUSD` in
+Particle's own fee quotes. This is inherent to calling
+`createUniversalTransaction()` / `createTransferTransaction()` at all —
+there's no gas-sponsorship flag in our own code, because we don't
+configure this, Particle's backend just does it.
+- Pinned dependency, deliberately —
+  [`sdk/src/ua/account.ts#L5-L10`](sdk/src/ua/account.ts#L5-L10) —
+  Universal Accounts was mid-migration to a V2 API surface at build time,
+  so every type used here was read off that exact version's declarations,
+  not the public docs.
+
+> **The one-sentence version:** the buyer's EOA becomes a smart account in
+> place via EIP-7702; one signature authorizes a tree of userops across
+> chains; liquidity providers who already hold inventory on both sides
+> atomically take the buyer's funds locally and release equivalent funds
+> on the settlement chain; Particle's own coordination layer sequences it
+> and handles refunds; and a paymaster covers gas everywhere. Nothing
+> bridges — value changes hands.
 
 ### Magic — the buyer's signer
 

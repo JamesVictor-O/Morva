@@ -20,6 +20,7 @@ function toStallDto(row: typeof stalls.$inferSelect): Stall {
     featured: row.featured,
     payoutAddress: row.payoutAddress,
     payoutToken: row.payoutToken,
+    payoutChainId: row.payoutChainId,
     illustration: row.illustration as Stall["illustration"],
     photoUrl: row.photoUrl ?? undefined,
   };

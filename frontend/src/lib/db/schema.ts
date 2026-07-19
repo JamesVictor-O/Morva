@@ -22,6 +22,10 @@ export const stalls = pgTable("stalls", {
   photoUrl: text("photo_url"),
   payoutAddress: text("payout_address").notNull(),
   payoutToken: text("payout_token").notNull().default("USDC"),
+  /** A real EVM chain id from @morva/sdk's SUPPORTED_SETTLEMENT_CHAIN_IDS
+   *  — Arbitrum One (42161) by default, matching the SDK's own default and
+   *  every stall onboarded before this column existed. */
+  payoutChainId: integer("payout_chain_id").notNull().default(42161),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

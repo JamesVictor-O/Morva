@@ -1,0 +1,1 @@
+ALTER TABLE "stalls" ADD COLUMN "payout_chain_id" integer DEFAULT 42161 NOT NULL;

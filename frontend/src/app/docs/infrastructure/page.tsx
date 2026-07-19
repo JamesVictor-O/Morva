@@ -163,6 +163,135 @@ export default function InfrastructurePage() {
         </P>
       </Callout>
 
+      <H3 id="mechanism">The full mechanism, bottom to top</H3>
+      <P>
+        Everything above explains <em>which calls</em> this SDK makes. This
+        is <em>what actually happens</em> underneath them — the part that
+        matters when someone asks a harder question than &quot;does it
+        work.&quot; Running example: a real $1.20 payment during
+        development, sourced as 0.94 USDC already on Arbitrum (the
+        settlement chain) + 0.80 USDC on Base.
+      </P>
+
+      <H3 id="layer1">Layer 1 — the account: why one signature can act on two chains</H3>
+      <P>
+        In EIP-7702 mode, the buyer&apos;s own EOA gets delegated
+        smart-account code — Universal Accounts are ERC-4337 smart-account
+        implementations attached to a pre-existing EOA, and 7702 lets that
+        attachment happen <em>at the same address</em> instead of deploying
+        a separate contract. Because the account is programmable, it
+        executes <strong className="text-ink">UserOperations</strong> —
+        signed instruction bundles — instead of raw transactions. When{" "}
+        <InlineCode>createUniversalTransaction()</InlineCode> is called,
+        Particle plans a set of userops, one per chain involved (a Base-side
+        op releasing funds, an Arbitrum-side op executing the actual ERC-20
+        transfer), and hands back a single root hash covering all of them.
+      </P>
+      <UL>
+        <LI>
+          The one signature over that root —{" "}
+          <a href="https://github.com/JamesVictor-O/Morva/blob/main/sdk/src/ua/pay.ts#L151-L155" target="_blank" rel="noreferrer" className="font-semibold text-ink underline underline-offset-2">
+            <InlineCode>sdk/src/ua/pay.ts#L151-L155</InlineCode>
+          </a>{" "}
+          — the buyer signs <InlineCode>transaction.rootHash</InlineCode>{" "}
+          exactly once; that one signature authorizes every userop
+          underneath it.
+        </LI>
+        <LI>
+          The 7702 delegation authorizations — a <em>separate</em> signed
+          object from the payment signature above —{" "}
+          <a href="https://github.com/JamesVictor-O/Morva/blob/main/sdk/src/ua/authorization.ts#L15-L45" target="_blank" rel="noreferrer" className="font-semibold text-ink underline underline-offset-2">
+            <InlineCode>sdk/src/ua/authorization.ts#L15-L45</InlineCode>
+          </a>{" "}
+          — one per chain that still needs its delegation activated, deduped
+          by chain+nonce (an authorization nonce is scoped per chain, so two
+          chains can legitimately share nonce <InlineCode>0</InlineCode>).
+        </LI>
+      </UL>
+
+      <H3 id="layer2">Layer 2 — the movement: no bridge, an atomic swap with a counterparty</H3>
+      <P>
+        Nothing the buyer holds ever crosses a bridge. Instead, a
+        decentralized network of liquidity providers already holds
+        inventory on every chain Particle supports. The buyer&apos;s Base
+        USDC goes to an LP on Base; that same LP network releases the
+        equivalent amount from inventory it already holds on Arbitrum. Two
+        local transfers, economically linked by the LP&apos;s own fee —
+        nothing physically travels between chains.
+      </P>
+      <Callout tone="warning" title="This is exactly why sub-$1 test payments failed outright">
+        <P>
+          An LP filling a $0.10 leg earns less than the leg costs to
+          facilitate — the route simply doesn&apos;t get built. It&apos;s
+          also why the settlement token has to be one of Particle&apos;s
+          recognized &quot;primary assets&quot; (USDC/USDT/ETH/BNB/SOL): the
+          LP network only makes markets in tokens it can safely hold and
+          rebalance. A token it doesn&apos;t inventory on a given chain is
+          stranded there, full stop — no amount of retrying fixes it.
+        </P>
+      </Callout>
+      <P>
+        This is the same mechanism the callout above (
+        <InlineCode>createUniversalTransaction</InlineCode> vs.{" "}
+        <InlineCode>createTransferTransaction</InlineCode>) already
+        describes at the API level — <InlineCode>expectTokens</InlineCode>{" "}
+        is literally how our code tells Particle &quot;solve this LP-mediated
+        routing problem for me.&quot;
+      </P>
+
+      <H3 id="layer3">Layer 3 — the coordinator: who makes it atomic-ish</H3>
+      <P>
+        Something has to sequence &quot;funds locked on Base&quot; before
+        &quot;LP releases on Arbitrum&quot; before &quot;the merchant
+        transfer executes,&quot; and handle a leg failing. That&apos;s
+        Particle&apos;s own coordination layer — bundler nodes land each
+        userop on its chain, and execution is optimistic with a refund path
+        if a leg dies.
+      </P>
+      <UL>
+        <LI>
+          Where our code recognizes that refund path —{" "}
+          <a href="https://github.com/JamesVictor-O/Morva/blob/main/sdk/src/ua/pay.ts#L80-L85" target="_blank" rel="noreferrer" className="font-semibold text-ink underline underline-offset-2">
+            <InlineCode>sdk/src/ua/pay.ts#L80-L85</InlineCode>
+          </a>{" "}
+          (the status codes) and{" "}
+          <a href="https://github.com/JamesVictor-O/Morva/blob/main/sdk/src/ua/pay.ts#L405-L414" target="_blank" rel="noreferrer" className="font-semibold text-ink underline underline-offset-2">
+            <InlineCode>#L405-L414</InlineCode>
+          </a>{" "}
+          (checked against a live transaction) —{" "}
+          <InlineCode>REFUND_FINISHED</InlineCode> specifically means a
+          cross-chain leg died and the buyer&apos;s source funds came back.
+          This error handling has been modeling this architecture the whole
+          time, not guessing at it.
+        </LI>
+      </UL>
+
+      <H3 id="layer4">Layer 4 — gas: why the buyer never needed ETH anywhere</H3>
+      <P>
+        A paymaster fronts native gas on whichever chain needs it and
+        recoups the cost from the buyer&apos;s own primary assets — visible
+        as <InlineCode>gasFeeTokenAmountInUSD</InlineCode> in Particle&apos;s
+        own fee quotes. This is inherent to calling{" "}
+        <InlineCode>createUniversalTransaction()</InlineCode> /{" "}
+        <InlineCode>createTransferTransaction()</InlineCode> at all — there
+        is no gas-sponsorship flag anywhere in this SDK&apos;s own code,
+        because we don&apos;t configure this; Particle&apos;s backend just
+        does it.
+      </P>
+
+      <Callout title="The one-sentence version, for when someone asks">
+        <P>
+          The buyer&apos;s EOA becomes a smart account in place via
+          EIP-7702; one signature authorizes a tree of userops across
+          chains; liquidity providers who already hold inventory on both
+          sides atomically take the buyer&apos;s funds locally and release
+          equivalent funds on the settlement chain; Particle&apos;s own
+          coordination layer sequences it and handles refunds; and a
+          paymaster covers gas everywhere. Nothing bridges — value changes
+          hands.
+        </P>
+      </Callout>
+
       <H2 id="magic">Magic — the buyer&apos;s signer</H2>
       <P>
         Universal Accounts in EIP-7702 mode need a real EIP-7702 authorization
@@ -247,13 +376,19 @@ export default function InfrastructurePage() {
         both <em>which token</em> and <em>which chain</em> they settle to.
       </P>
       <P>
-        Morva Plaza, this repo&apos;s reference storefront, settles every
-        payment to USDC on Arbitrum One deliberately — one chain to
-        monitor, low gas for the final settlement leg, and no cross-chain
-        settlement risk on the merchant&apos;s side regardless of how many
-        chains the buyer&apos;s liquidity was actually sourced from. That&apos;s
-        a choice Plaza makes with a real config value, not a limit the SDK
-        imposes on every integration.
+        Morva Plaza, this repo&apos;s reference storefront, lets each merchant
+        pick their own settlement token and chain at{" "}
+        <InlineCode>/merchant/settings</InlineCode> — from a short, verified
+        list of USD stablecoins (Arbitrum One is the default a new stall
+        starts on, not the only option). It&apos;s deliberately a short list,
+        not &quot;any token on any of the SDK&apos;s{" "}
+        <InlineCode>SUPPORTED_SETTLEMENT_CHAIN_IDS</InlineCode>&quot;: Plaza&apos;s
+        product prices are entered in USD, and settling in a non-1:1-USD
+        token (ETH, BNB, ...) would need a live price conversion this app
+        has no oracle for. Whichever one a merchant picks, they get one
+        chain to monitor, low gas for the final settlement leg, and no
+        cross-chain settlement risk on their side regardless of how many
+        chains the buyer&apos;s liquidity was actually sourced from.
       </P>
 
       <H2 id="registry">MorvaRegistry — optional on-chain merchant identity</H2>

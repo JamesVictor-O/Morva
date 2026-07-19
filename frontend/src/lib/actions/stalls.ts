@@ -6,6 +6,7 @@ import { stalls } from "../db/schema";
 import { requireMerchantSession } from "../auth/session";
 import { getMyStall } from "../data/stalls";
 import { uploadPhoto } from "../storage";
+import { findSettlementOption } from "../settlement-options";
 import type { Accent } from "../types";
 
 function slugify(name: string): string {
@@ -77,16 +78,29 @@ export async function createStall(formData: FormData): Promise<{ slug: string }>
   return { slug };
 }
 
+const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+
 export async function updateStallPayout(formData: FormData): Promise<void> {
   const stall = await getMyStall();
   if (!stall) throw new Error("No stall found for this wallet.");
 
   const payoutAddress = String(formData.get("payoutAddress") ?? "").trim();
   const payoutToken = String(formData.get("payoutToken") ?? stall.payoutToken).trim();
-  if (!payoutAddress) throw new Error("Payout address is required.");
+  const payoutChainId = Number(formData.get("payoutChainId") ?? stall.payoutChainId);
+
+  if (!ADDRESS_PATTERN.test(payoutAddress)) {
+    throw new Error("Enter a valid wallet address (0x followed by 40 hex characters).");
+  }
+  // Never trust a client-submitted chain/token pair directly — only a
+  // combination this app actually has a verified token address for (see
+  // settlement-options.ts) is accepted, same reasoning as re-reading
+  // prices server-side rather than trusting the client cart.
+  if (!findSettlementOption(payoutChainId, payoutToken)) {
+    throw new Error("Unsupported settlement token/chain combination.");
+  }
 
   await db
     .update(stalls)
-    .set({ payoutAddress, payoutToken, updatedAt: new Date() })
+    .set({ payoutAddress, payoutToken, payoutChainId, updatedAt: new Date() })
     .where(eq(stalls.id, stall.id));
 }

@@ -15,23 +15,13 @@ import { getMagic } from "@/lib/magic";
 import { MagicSigner } from "@/lib/magic-signer";
 import { createPendingOrder, markOrderFailed, markOrderSettled } from "@/lib/actions/orders";
 import { formatUsd } from "@/lib/format";
+import { findSettlementOption } from "@/lib/settlement-options";
 import type { Stall } from "@/lib/types";
 import { createMorva, SettlementTimeout, type PaymentStatus as SdkPaymentStatus } from "@morva/sdk";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
 type Step = "review" | "processing" | "success";
-
-// Only USDC on Arbitrum One is wired up in Plaza today — a Plaza scope
-// choice (stalls don't yet store a payout chain/token beyond this), not an
-// SDK limitation; @morva/sdk itself supports settling to any of
-// SUPPORTED_SETTLEMENT_CHAIN_IDS. This exact address is the one already
-// proven live by sdk/scripts/e2e-payment.ts (Gate 2), not a freshly-typed
-// one. A stall configured for any other payout token shows a clear error
-// at pay time rather than attempting a transfer to a guessed address.
-const TOKEN_ADDRESSES: Record<string, `0x${string}`> = {
-  USDC: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-};
 
 const STATUS_LABEL: Record<SdkPaymentStatus, string> = {
   building: "Preparing your payment…",
@@ -101,9 +91,18 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
   async function handlePay() {
     if (!covers || !user?.publicAddress) return;
 
-    const tokenAddress = TOKEN_ADDRESSES[stall.payoutToken ?? "USDC"];
-    if (!tokenAddress) {
-      setPayError(`This stall settles in ${stall.payoutToken}, which checkout doesn't support yet.`);
+    // Settlement chain/token is the merchant's own choice (see
+    // merchant/settings) — re-resolved from the verified list here rather
+    // than trusted off the stall row directly, same reasoning as
+    // re-reading prices server-side instead of the client cart.
+    const settlementOption = findSettlementOption(
+      stall.payoutChainId ?? 42161,
+      stall.payoutToken ?? "USDC"
+    );
+    if (!settlementOption) {
+      setPayError(
+        `This stall settles in ${stall.payoutToken}, which checkout doesn't support yet.`
+      );
       return;
     }
 
@@ -152,13 +151,11 @@ export function CheckoutPageClient({ stall }: { stall: Stall }) {
         // being sent to a 6-decimal token.
         amount: total.toFixed(6),
         orderId: pending.orderNumber,
-        settlementToken: tokenAddress,
+        settlementToken: settlementOption.tokenAddress,
         settlementRecipient: stall.payoutAddress as `0x${string}`,
-        // Explicit, not just relying on the SDK's default: Morva Plaza
-        // settles on Arbitrum One today (stalls don't yet have a
-        // per-merchant chain preference — see TOKEN_ADDRESSES above). The
-        // SDK itself supports any of SUPPORTED_SETTLEMENT_CHAIN_IDS.
-        settlementChainId: 42161,
+        // The merchant's own choice from merchant/settings, not a fixed
+        // default — see lib/settlement-options.ts.
+        settlementChainId: settlementOption.chainId,
       });
 
       const result = await session.pay(intent, {

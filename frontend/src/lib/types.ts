@@ -18,6 +18,9 @@ export interface Stall {
   /** Absent for the pre-backend mock stalls — checkout treats a missing
    *  value as "USDC". */
   payoutToken?: string;
+  /** Absent for the pre-backend mock stalls — checkout treats a missing
+   *  value as Arbitrum One (42161), matching the DB column's own default. */
+  payoutChainId?: number;
   illustration: StallIllustration;
   /** Vendor-uploaded photo — arbitrary source dimensions/aspect ratio/
    *  quality. Falls back to `illustration` when absent. */

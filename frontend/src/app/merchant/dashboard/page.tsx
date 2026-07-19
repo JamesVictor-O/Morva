@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
@@ -11,6 +12,7 @@ import { getMyStall } from "@/lib/data/stalls";
 import { getMyProducts } from "@/lib/data/products";
 import { getMyPayments, getWeeklyStats } from "@/lib/data/orders";
 import { formatUsd } from "@/lib/format";
+import { findSettlementOption } from "@/lib/settlement-options";
 import type { Accent } from "@/lib/types";
 
 export default async function MerchantDashboardPage() {
@@ -64,7 +66,9 @@ export default async function MerchantDashboardPage() {
         <div className="rounded-[28px] border border-border-soft bg-surface-solid p-[26px]">
           <div className="flex items-center justify-between">
             <p className="text-[17px] font-semibold text-ink">Where your money goes</p>
-            <span className="cursor-default text-[14px] font-semibold text-ink-faint">Edit</span>
+            <Link href="/merchant/settings" className="text-[14px] font-semibold text-ink transition-colors hover:text-primary">
+              Edit
+            </Link>
           </div>
           <div className="mt-5 flex flex-col gap-4">
             <div className="flex items-center justify-between">
@@ -80,6 +84,12 @@ export default async function MerchantDashboardPage() {
                   $
                 </span>
                 <span className="text-[15px] font-semibold text-ink">{stall.payoutToken}</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[14px] text-ink-faint">Chain</span>
+              <span className="text-[15px] font-semibold text-ink">
+                {findSettlementOption(stall.payoutChainId, stall.payoutToken)?.chainName ?? `Chain ${stall.payoutChainId}`}
               </span>
             </div>
             <div className="flex items-center justify-between">
